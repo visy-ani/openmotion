@@ -149,18 +149,18 @@ export function verifiedShareUrl(rawUrl: unknown, projectId: string, slug: strin
 }
 
 /**
- * Game shares are meant to be played, not reviewed: the cloud share viewer
- * hides its comments rail, comment dock and mobile comments when the link
- * carries `comments=off`. Other target kinds keep the default review viewer.
+ * Game shares are meant to be played, not reviewed: with `kind=game` the cloud
+ * share viewer hides its comments UI and shows the "Made with OpenMotion" bar
+ * with one-click Remix. Other target kinds keep the default review viewer.
  */
-export const SHARE_VIEWER_COMMENTS_OFF_PARAM = 'comments';
-export const SHARE_VIEWER_COMMENTS_OFF_VALUE = 'off';
+export const SHARE_VIEWER_KIND_PARAM = 'kind';
+export const SHARE_VIEWER_GAME_KIND = 'game';
 
 export function shareViewerUrlForTarget(kind: WebPublishTargetKind, url: string | null): string | null {
   if (!url || kind !== 'game') return url;
   try {
     const parsed = new URL(url);
-    parsed.searchParams.set(SHARE_VIEWER_COMMENTS_OFF_PARAM, SHARE_VIEWER_COMMENTS_OFF_VALUE);
+    parsed.searchParams.set(SHARE_VIEWER_KIND_PARAM, SHARE_VIEWER_GAME_KIND);
     return parsed.toString();
   } catch {
     return url;
