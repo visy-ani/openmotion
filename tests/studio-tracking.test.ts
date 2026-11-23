@@ -50,6 +50,16 @@ test('migration keeps signed/fractional measurements and only safe summaries', (
   const shadow = studioUsageProperties('sdk_resolver_shadow', studioTrackingFixtures.sdk_resolver_shadow)!;
   assert.equal(shadow.element_not_found_count, 1); assert.equal(shadow.value_mismatch_count, 1);
   assert.equal(studioUsageProperties('studio_feedback', studioTrackingFixtures.studio_feedback)?.has_comment, true);
+  // The feedback card sends the render it is about; it must survive the boundary, and a non-uuid must not.
+  const renderId = '3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+  for (const event of ['studio_feedback_shown', 'studio_feedback_dismissed', 'studio_feedback_interview_click', 'studio_feedback']) {
+    const fixtureForEvent = studioTrackingFixtures[event as keyof typeof studioTrackingFixtures];
+    assert.equal(studioUsageProperties(event, { ...fixtureForEvent, render_id: renderId })?.render_id, renderId, event);
+    assert.equal(studioUsageProperties(event, { ...fixtureForEvent, render_id: 'not-a-render' })?.render_id, undefined, event);
+  }
+  // The server render job id embeds the project id and a timestamp, which is why the
+  // rule stays `uuid` and the prompt mints its own opaque identifier instead.
+  assert.equal(studioUsageProperties('studio_feedback_shown', { ...studioTrackingFixtures.studio_feedback_shown, render_id: 'demo_2026-11-10_10-00-00' })?.render_id, undefined);
   assert.equal(studioUsageProperties('crash', studioTrackingFixtures.crash)?.error_name, 'OtherError');
   assert.equal(studioUsageProperties('unknown', {}), null);
   assert.equal(studioUsageProperties('playback', { action: 'PRIVATE' }), null);

@@ -702,3 +702,29 @@ test('general model discovery never waits for a pending Cloud discovery', () => 
   try { assert.equal((await gateway.listModels()).models.some(m => m.provider === 'codex'), true); }
   finally { release(); await pending; await gateway.close(); }
 }));
+
+test('pre-upgrade Cloud cache rows normalize synthetic maxInputImages: 1 during discovery without refresh', () => fixture(async store => {
+  const gateway = gatewayFor(store); gateway.options.detect = async () => [];
+  await gateway.configureProvider('opendesign', { apiKey: 'stale-key', baseUrl: 'https://cloud.example' });
+  gateway.options.fetcher = (async () => Response.json({
+    models: [
+      { model: 'gpt-image-2.6-sunburst', kind: 'image', capabilities: { edits: true } },
+      { model: 'seedream-5.0-flash', kind: 'image', capabilities: { edits: true } },
+    ],
+  })) as Fetcher;
+  await gateway.listModels({ provider: 'opendesign', refresh: true });
+  // Simulate a pre-upgrade cloud-catalog.json written by the old adapter that persisted synthetic maxInputImages: 1.
+  const catalogPath = path.join(gateway.root, 'cloud-catalog.json');
+  const saved = JSON.parse(await readFile(catalogPath, 'utf8'));
+  for (const row of saved.models) row.maxInputImages = 1;
+  await writeFile(catalogPath, JSON.stringify(saved), 'utf8');
+
+  let refreshed = false;
+  gateway.options.fetcher = (async () => { refreshed = true; return Response.json({ models: [] }); }) as Fetcher;
+  const listed = (await gateway.listModels({ provider: 'opendesign', modality: 'image' })).models;
+  assert.equal(refreshed, false);
+  const byId = new Map(listed.map(model => [model.modelId, model.maxInputImages]));
+  assert.equal(byId.get('gpt-image-2.6-sunburst'), 16);
+  assert.equal(byId.get('seedream-5.0-flash'), 10);
+  await gateway.close();
+}));

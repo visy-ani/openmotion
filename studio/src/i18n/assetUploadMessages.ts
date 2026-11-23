@@ -1,5 +1,7 @@
+import { assetUploadFormats } from '../../../shared/asset-library';
+import type { Modality } from '../../../shared/gateway';
 import type { Translate } from './messages';
-import type { AssetUploadReason } from '../motion/assetUploadError';
+import { AssetUploadError, type AssetUploadReason } from '../motion/assetUploadError';
 
 export interface AssetUploadSummary {
   uploaded: number;
@@ -19,6 +21,27 @@ const guidance: Record<string, string> = {
 };
 const confirm = 'Check the asset library before uploading unconfirmed files again.';
 const imageFormats = 'Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.';
+
+export function assetUploadFormatsHint(t: Translate, modality?: Modality): string {
+  const formats = modality ? assetUploadFormats[modality].join(', ') : t(
+    'Images ({images}) · Video ({video}) · Audio ({audio})',
+    { images: assetUploadFormats.image.join(', '), video: assetUploadFormats.video.join(', '), audio: assetUploadFormats.audio.join(', ') },
+  );
+  return t('Supported formats · {formats}', { formats });
+}
+
+export function recordAssetUploadFailure(summary: AssetUploadSummary, file: File, error: unknown) {
+  if (!(error instanceof AssetUploadError) || error.outcome !== 'rejected') {
+    summary.unknown++;
+    return;
+  }
+  summary.failed++;
+  if (error.reason) summary.reasons.add(error.reason);
+  if ((error.reason === 'unsupported' || error.reason === 'unreadable')
+    && (file.type.startsWith('image/') || /\.svgz?$/i.test(file.name))) {
+    summary.imageFormatHelp = true;
+  }
+}
 
 export function assetUploadMessage(summary: AssetUploadSummary, t: Translate = (key, values = {}) => key.replace(/\{(\w+)\}/g, (_, name) => String(values[name]))) {
   const { uploaded, failed, unknown } = summary;

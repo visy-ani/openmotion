@@ -45,7 +45,7 @@ it('only editable templates open a new engineering project; references copy thei
   expect(clipboard.mock.calls[0][0]).toBe([
     '使用说明：请使用 OpenMotion 插件。如未安装，请按 `https://github.com/nexu-io/openmotion` 安装并接入后继续。',
     '指定模板：Reference（hf-moment-M953）',
-    '创作要求：基于模板，结合我的要求和附件创作，默认保留主要动效与风格，并交付 HTML 和 MP4。',
+    '创作要求：基于模板，结合我的要求和附件创作。保留原模板的场景、界面和动画结构（可编辑模板直接原地替换文字与素材），不另写简陋文字卡页面；需要舍弃内容时先说明取舍，并交付 HTML 和 MP4。',
     '我的要求：\n',
   ].join('\n'));
   expect(state.open).toHaveBeenCalledTimes(1);

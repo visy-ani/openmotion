@@ -11,7 +11,10 @@ import { isMain } from './shared/entry.ts';
 import { templateConfig } from './shared/template-config.ts';
 import { phase1McpCapabilities, supportsPhase1Tool } from './shared/phase1-tools.ts';
 
-export const sharedEditorEnabled = process.platform === 'darwin';
+export const sharedEditorEnabled =
+  process.platform === 'darwin'
+  && process.env.MOTION_DESKTOP_APP !== '1'
+  && process.env.MOTION_SHARED_EDITOR !== '0';
 const root = fileURLToPath(new URL('./', import.meta.url));
 const version = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const runtimeFiles = ['package-lock.json', 'scripts/npm-runtime.mjs', 'scripts/runtime-assets.mjs', 'scripts/runtime-lock.json', 'scripts/verify-export.ts', ...readdirSync(root).filter(file => file.endsWith('.ts')),

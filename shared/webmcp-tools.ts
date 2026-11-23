@@ -9,7 +9,8 @@ function failure(message: string, applied: boolean | 'unknown', fallback = 'WEBM
 
 /** Page registration reuses the public contract and the existing service authority. */
 export function buildOpenMotionWebMcpTools(request: (url: string, init?: RequestInit) => Promise<Response>) {
-  return phase1Tools.map(tool => ({
+  // Game tools serve the user's external Agent over MCP; the in-page WebMCP surface does not expose them.
+  return phase1Tools.filter(tool => !tool.name.startsWith('openmotion_game_')).map(tool => ({
     name: tool.name,
     title: tool.title,
     description: tool.description + ' WebMCP returns the existing service result on success, or isError=true with error={code,message,applied}. After an uncertain write, read the project or original job before retrying; retain the original requestId.',

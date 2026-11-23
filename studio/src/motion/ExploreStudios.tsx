@@ -9,10 +9,14 @@ import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { exploreCommunities, findMediaStudio, findTechniqueStudio, type CreativeStudio, type ExploreCommunity, type MediaStudio } from '../../../shared/studio-catalog';
 import type { GalleryTemplate, TemplatePage } from '../../../shared/catalog';
 import type { ExploreFilters, TemplateCollection } from './workspacePageRouting';
-import { useI18n } from '../i18n/I18n';
+import { languages, useI18n, type Locale } from '../i18n/I18n';
+import { Select } from '../components/ui/Select';
 import { CoverPlaceholder } from '../components/ui/CoverPlaceholder';
 import { ExploreCoverImage } from './ExploreCoverImage';
 import { RemixIcon } from '../icons/RemixIcons';
+import { discord, feishu } from './CommunityLink';
+import { GITHUB_REPOSITORY } from './githubRepository';
+import { clickOption, trackStudioClick } from './editorTracking';
 import { creativeStudios, mediaEditorDestination, mediaLabels, motionStudio, scenesForStudio, studioScenes, type StudioDestination, type StudioScene } from './creativeStudios';
 import { sceneExamples, type SceneExample } from './sceneShowcase';
 import { AssetHoverVideo } from './AssetHoverVideo';
@@ -20,7 +24,7 @@ import { useTemplatePlayback } from './useTemplatePlayback';
 import { editingPresets, motionSkills, skillCategories, type SkillCategory, type MotionSkill } from './skillCatalog';
 import { useWorkspaceChrome } from './WorkspaceChromeContext';
 import { ExploreActionLabel, ExploreTemplateCard, TemplatePromptAction, useExploreTemplates, useExploreTemplateShelf, type ExploreTemplateFilter } from './ExploreTemplates';
-import { ClaudeStories, ExploreHighlights, ModelCollection } from './ExploreStories';
+import { ClaudeStories, ExploreHighlights, GameStories, ModelCollection } from './ExploreStories';
 import { gptImageStory, seedanceStory } from './exploreModelStories';
 import { ExploreSpotlight, featuredSceneIds } from './ExploreSpotlight';
 import { SkillMedia } from './SkillMedia';
@@ -33,6 +37,8 @@ import { skillCategoryId } from './pageTracking';
 import { optionId, send, slugField } from './reporting';
 import { ExploreDesignSection } from '../design/scenes/ExploreDesignSection';
 import type { DesignTabId } from '../design/scenes/DesignSceneTabs';
+import { scenarioDefinitions, type ScenarioId } from '../../../shared/scenarios';
+import { ScenarioHighlights } from './ScenarioHighlights';
 import './sceneDiscovery.css';
 
 type ExploreArea = Parameters<typeof reportCreativeClick>[1];
@@ -79,6 +85,10 @@ type ExploreProps = {
   onMcp: (client?: 'claude', example?: string) => void;
   onSelectDesignScene?: (scene: DesignTabId) => void;
   onOpenDesignProject?: (projectId: string) => void;
+  onStartScenario?: (id: ScenarioId) => void;
+  onOpenScenarioHub?: () => void;
+  onOpenGameStudio?: (gameId?: string) => void;
+  onBuildGameInSuperAgent?: () => void;
   active: boolean;
   filters: ExploreFilters;
 };
@@ -178,8 +188,8 @@ function TemplateSpotlight({ item, onTry }: { item: GalleryTemplate; onTry: (pro
   </Button><TemplatePromptAction item={item} onTry={prompt => { track('explore_featured', 'try_prompt', { template: item.id }); onTry(prompt); }} /></article>;
 }
 
-function StudioCollection({ studio, medium, onChooseStudio, onSkill, onNavigate, onSelectDesignScene, onOpenDesignProject, ...playback }: FeedPlayback & {
-  studio: CreativeStudio; medium: ExploreFilters['medium'];
+function StudioCollection({ active, studio, medium, onChooseStudio, onSkill, onNavigate, onSelectDesignScene, onOpenDesignProject, ...playback }: FeedPlayback & {
+  active: boolean; studio: CreativeStudio; medium: ExploreFilters['medium'];
 } & Pick<ExploreProps, 'onChooseStudio' | 'onSkill' | 'onNavigate' | 'onSelectDesignScene' | 'onOpenDesignProject'>) {
   const { t } = useI18n();
   const community = exploreCommunities.find(item => item.studios[0] === studio.id);
@@ -230,46 +240,83 @@ function StudioCollection({ studio, medium, onChooseStudio, onSkill, onNavigate,
       <header className="om-discovery-heading"><div><h2>{t(studio.title)}</h2></div>
         <Button variant="ghost" className="om-button h-auto" onClick={() => { track('explore_collection', 'open_studio', { studio: studio.id, collection: studio.id }); onChooseStudio(studio); }}>{t(studio.title)}<RemixIcon name="arrow-right-line" size={16} /></Button>
       </header>
-      <ExploreDesignSection onSelectDesignScene={onSelectDesignScene} onOpenProject={onOpenDesignProject} />
+      <ExploreDesignSection active={active} onSelectDesignScene={onSelectDesignScene} onOpenProject={onOpenDesignProject} />
     </section>
   </>;
 }
 
-function CapabilityIndex({ active, onModel, onNavigate, onChooseStudio, onBrandKit, onMcp, onSkill }: Pick<ExploreProps, 'active' | 'onModel' | 'onNavigate' | 'onChooseStudio' | 'onBrandKit' | 'onMcp' | 'onSkill'>) {
-  const { t } = useI18n(), { openAssets, openModelSettings, openLibrary, openSkills } = useWorkspaceChrome();
+const OPEN_DESIGN_SITE = 'https://open-design.ai';
+const footerSocialLinks = [
+  { label: 'X / Twitter', href: 'https://x.com/OpenDesignHQ' },
+  { label: 'YouTube', href: 'https://www.youtube.com/@Open-Design-ai' },
+  { label: 'GitHub', href: GITHUB_REPOSITORY },
+  { label: discord.platform, href: discord.href },
+] as const;
+const footerLegalLinks = [
+  { label: 'About', href: `${OPEN_DESIGN_SITE}/about` },
+  { label: 'Documentation', href: `${GITHUB_REPOSITORY}/tree/main/docs` },
+  { label: 'Privacy Policy', href: `${OPEN_DESIGN_SITE}/privacy` },
+  { label: 'Terms of Service', href: `${OPEN_DESIGN_SITE}/terms` },
+  { label: 'Refund Policy', href: `${OPEN_DESIGN_SITE}/refund` },
+  { label: 'Report an issue', href: `${GITHUB_REPOSITORY}/issues/new/choose` },
+] as const;
+
+function CapabilityIndex({ active, onModel, onNavigate, onChooseStudio, onBrandKit, onMcp, onSkill, onStartScenario, onOpenScenarioHub }: Pick<ExploreProps, 'active' | 'onModel' | 'onNavigate' | 'onChooseStudio' | 'onBrandKit' | 'onMcp' | 'onSkill' | 'onStartScenario' | 'onOpenScenarioHub'>) {
+  const { t, locale, setLocale } = useI18n(), { openAssets, openModelSettings, openLibrary, openSkills } = useWorkspaceChrome();
   const [skillCategory, setSkillCategory] = useState<SkillCategory | null>(null);
   const [modelsFor, setModelsFor] = useState<StudioScene['modality'] | null>(null);
   const gateway = useMediaCatalog(active && modelsFor !== null);
+  const mediaStudios = creativeStudios.filter((studio): studio is MediaStudio => studio.surface === 'media');
+  const primaryMediaStudios = mediaStudios.filter(studio => studio.primaryModality !== 'audio');
+  const audioStudio = mediaStudios.find(studio => studio.primaryModality === 'audio');
+  const renderMediaColumn = (studio: MediaStudio) => {
+    const kind = studio.primaryModality;
+    return <div key={kind}><h3>{t(mediaLabels[kind])}</h3>
+      {scenesForStudio(studio).map(scene => <Button variant="plain" className="om-nav-item" key={scene.id} onClick={() => {
+        const target = mediaEditorDestination(scene);
+        track('capability_index', 'select_scene', destinationTarget(target));
+        onNavigate(target);
+      }}>{t(scene.label)}</Button>)}
+      <Button variant="plain" className="om-nav-item" aria-expanded={modelsFor === kind} aria-controls={modelsFor === kind ? 'om-explore-models' : undefined}
+        aria-label={t(mediaLabels[kind]) + ' · ' + t('Models')} onClick={() => { track('capability_index', 'models_toggle', { medium: kind, expanded: modelsFor !== kind }); setModelsFor(modelsFor === kind ? null : kind); }}>
+        {t('Models')}<RemixIcon name="arrow-down-s-line" size={14} />
+      </Button>
+      {modelsFor === kind && <div className="om-index-models" id="om-explore-models">
+        <MediaModelChoices {...gateway} kind={kind} onModel={model => { track('capability_index', 'select_model', { medium: kind, model }); onModel(model); }}
+          onNavigate={target => { track('capability_index', 'select_model', { medium: kind, ...destinationTarget(target) }); onNavigate(target); }}
+          openProviders={() => { track('capability_index', 'open_providers', { medium: kind }); openModelSettings(); }} />
+      </div>}
+    </div>;
+  };
   return <footer className="om-capability-index" aria-label={t('Capability index')}><div className="om-capability-inner">
-    <h2 lang="en">Open Design</h2>
+    <div className="om-capability-brand">
+      <h2 lang="en">Open Design</h2>
+      <p className="om-capability-definition" lang="en">The open source AI-NATIVE creative SUITE</p>
+    </div>
     <div className="om-capability-body">
     <div className="om-capability-columns">
-      {creativeStudios.filter((studio): studio is MediaStudio => studio.surface === 'media').map(studio => {
-        const kind = studio.primaryModality;
-        return <div key={kind}><h3>{t(mediaLabels[kind])}</h3>
-        {scenesForStudio(studio).map(scene => <Button variant="plain" className="om-nav-item" key={scene.id} onClick={() => {
-          const target = mediaEditorDestination(scene);
-          track('capability_index', 'select_scene', destinationTarget(target));
-          onNavigate(target);
-        }}>{t(scene.label)}</Button>)}
-        <Button variant="plain" className="om-nav-item" aria-expanded={modelsFor === kind} aria-controls={modelsFor === kind ? 'om-explore-models' : undefined}
-          aria-label={t(mediaLabels[kind]) + ' · ' + t('Models')} onClick={() => { track('capability_index', 'models_toggle', { medium: kind, expanded: modelsFor !== kind }); setModelsFor(modelsFor === kind ? null : kind); }}>
-          {t('Models')}<RemixIcon name="arrow-down-s-line" size={14} />
-        </Button>
-        {modelsFor === kind && <div className="om-index-models" id="om-explore-models">
-          <MediaModelChoices {...gateway} kind={kind} onModel={model => { track('capability_index', 'select_model', { medium: kind, model }); onModel(model); }}
-            onNavigate={target => { track('capability_index', 'select_model', { medium: kind, ...destinationTarget(target) }); onNavigate(target); }}
-            openProviders={() => { track('capability_index', 'open_providers', { medium: kind }); openModelSettings(); }} />
-        </div>}
-      </div>;
-      })}
+      {onStartScenario && <div>
+        <h3>{t('Workflows')}</h3>
+        {scenarioDefinitions.map(scenario => <Button variant="plain" className="om-nav-item" key={scenario.id} onClick={() => {
+          track('capability_index', 'select_scene', { navTarget: 'workflows', studio: scenario.id });
+          onStartScenario(scenario.id);
+        }}>{t(scenario.title)}</Button>)}
+        {onOpenScenarioHub && <Button variant="plain" className="om-nav-item" onClick={() => {
+          track('capability_index', 'open_studio', { navTarget: 'workflows' });
+          onOpenScenarioHub();
+        }}>{t('All workflows')}</Button>}
+      </div>}
+      {primaryMediaStudios.map(renderMediaColumn)}
       <div><h3>{t('Studios')}</h3>{creativeStudios.map(studio => <Button variant="plain" className="om-nav-item" key={studio.id} onClick={() => { track('capability_index', 'open_studio', { studio: studio.id }); onChooseStudio(studio); }}>{t(studio.title)}</Button>)}</div>
-      <div><h3>{t('Workspace')}</h3>
-        <Button variant="plain" className="om-nav-item" onClick={event => { track('capability_index', 'template_library'); openLibrary(event.currentTarget); }}>{t('Template library')}</Button>
-        <Button variant="plain" className="om-nav-item" onClick={() => { track('capability_index', 'open_brand_kit'); onBrandKit(); }}>{t('Brand Kit')}</Button>
-        <Button variant="plain" className="om-nav-item" onClick={() => { track('capability_index', 'open_assets'); openAssets(); }}>{t('Workspace assets')}</Button>
-        <Button variant="plain" className="om-nav-item" onClick={() => { track('capability_index', 'open_providers'); openModelSettings(); }}>{t('Model providers')}</Button>
-        <Button variant="plain" className="om-nav-item" onClick={() => { track('capability_index', 'open_mcp'); onMcp(); }}>{t('MCP · Connect Agent')}</Button>
+      <div className="om-capability-column-stack">
+        {audioStudio && renderMediaColumn(audioStudio)}
+        <div><h3>{t('Workspace')}</h3>
+          <Button variant="plain" className="om-nav-item" onClick={event => { track('capability_index', 'template_library'); openLibrary(event.currentTarget); }}>{t('Template library')}</Button>
+          <Button variant="plain" className="om-nav-item" onClick={() => { track('capability_index', 'open_brand_kit'); onBrandKit(); }}>{t('Brand Kit')}</Button>
+          <Button variant="plain" className="om-nav-item" onClick={() => { track('capability_index', 'open_assets'); openAssets(); }}>{t('Workspace assets')}</Button>
+          <Button variant="plain" className="om-nav-item" onClick={() => { track('capability_index', 'open_providers'); openModelSettings(); }}>{t('Model providers')}</Button>
+          <Button variant="plain" className="om-nav-item" onClick={() => { track('capability_index', 'open_mcp'); onMcp(); }}>{t('MCP · Connect Agent')}</Button>
+        </div>
       </div>
     </div>
     <div className="om-index-skills">
@@ -290,7 +337,55 @@ function CapabilityIndex({ active, onModel, onNavigate, onChooseStudio, onBrandK
         </Button>)}</div>}
     </div>
     </div>
-  </div></footer>;
+  </div>
+  <div className="om-capability-meta">
+    <p className="om-capability-meta-copy" lang="en">
+      <a href={OPEN_DESIGN_SITE} target="_blank" rel="noopener noreferrer">open-design.ai</a>
+      <span aria-hidden="true"> · </span>
+      <span>OpenDesign &amp; OpenMotion</span>
+    </p>
+    <nav className="om-capability-social" aria-label={t('Social channels')}>
+      {footerSocialLinks.map(link => (
+        <a key={link.label} href={link.href} target="_blank" rel="noopener noreferrer" lang="en">{link.label}</a>
+      ))}
+      {locale === 'zh-CN' && (
+        <a href={feishu.href} target="_blank" rel="noopener noreferrer">{t('Feishu group')}</a>
+      )}
+    </nav>
+  </div>
+  <div className="om-capability-legal">
+    <div className="om-capability-legal-inner">
+      <p className="om-capability-copyright" lang="en">
+        <span>© 2026 Powerformer, Inc.</span>
+        <span aria-hidden="true"> · </span>
+        <a href={`${GITHUB_REPOSITORY}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">Apache-2.0</a>
+      </p>
+      <div className="om-capability-legal-actions">
+        <div className="om-capability-locale">
+          <Select
+            label={t('Language')}
+            value={locale}
+            className="om-capability-locale-trigger"
+            onCommit={value => {
+              if (value !== locale) trackStudioClick('settings', 'language_change', undefined, undefined, clickOption(value));
+              setLocale(value as Locale);
+            }}
+            options={languages.map(item => ({
+              value: item.locale,
+              label: item.label,
+              icon: <RemixIcon name="global-line" size={14} />,
+            }))}
+          />
+        </div>
+        <nav className="om-capability-legal-links" aria-label={t('Legal and policy links')}>
+          {footerLegalLinks.map(link => (
+            <a key={link.label} href={link.href} target="_blank" rel="noopener noreferrer">{t(link.label)}</a>
+          ))}
+        </nav>
+      </div>
+    </div>
+  </div>
+  </footer>;
 }
 
 function ExploreCollection({ community, root, firstPages, ...props }: ExploreProps & { firstPages: Map<string, TemplatePage>; community?: ExploreCommunity; root: RefObject<HTMLElement | null> }) {
@@ -347,7 +442,22 @@ function ExploreCollection({ community, root, firstPages, ...props }: ExplorePro
   for (let i = 0; i < Math.max(sceneCards.length, firstTemplates.length, skillCards.length); i++) {
     firstGroup.push(firstTemplates[i], sceneCards[i], skillCards[i]);
   }
-  const studioSection = (studio: CreativeStudio) => <StudioCollection key={studio.id} studio={studio} medium={medium}
+  const openGameStudio = (gameId?: string) => {
+    track('explore_featured', 'open_studio', { studio: 'game' });
+    if (props.onOpenGameStudio) {
+      props.onOpenGameStudio(gameId);
+      return;
+    }
+    const studio = findTechniqueStudio('game');
+    if (studio) onChooseStudio(studio);
+  };
+  const openGameInSuperAgent = props.onBuildGameInSuperAgent
+    ? () => {
+        track('explore_featured', 'open_studio', { studio: 'game', navTarget: 'super_agent' });
+        props.onBuildGameInSuperAgent!();
+      }
+    : undefined;
+  const studioSection = (studio: CreativeStudio) => <StudioCollection key={studio.id} active={active} studio={studio} medium={medium}
     onSelectDesignScene={props.onSelectDesignScene} onOpenDesignProject={props.onOpenDesignProject}
     onNavigate={onNavigate} onChooseStudio={onChooseStudio} onSkill={onSkill} playing={playing} onPriority={setPriority} />;
   const initialLoading = templates.loading && !firstTemplatePage;
@@ -360,13 +470,18 @@ function ExploreCollection({ community, root, firstPages, ...props }: ExplorePro
     {!medium && <div className="om-explore-features" data-split={Boolean(featuredTemplate || initialTemplateError || initialLoading)}>
       {community ? <CommunitySpotlight community={community} skill={skills[0]} onChooseStudio={onChooseStudio} /> :
         <ExploreSpotlight active={active} onOpenBlackFriday={props.onOpenBlackFriday} onNavigate={onNavigate}
-          onOpenMotionEditor={props.onOpenMotionEditor} motionEditorDisabled={props.motionEditorDisabled} onModelHub={props.onModelHub} />}
+          onOpenMotionEditor={props.onOpenMotionEditor} motionEditorDisabled={props.motionEditorDisabled} onModelHub={props.onModelHub} onStartScenario={props.onStartScenario}
+          onOpenGameStudio={openGameStudio} onBuildGameInSuperAgent={openGameInSuperAgent} />}
       {featuredTemplate && <TemplateSpotlight item={featuredTemplate} onTry={tryVideoPrompt} />}
       {initialTemplateError && templateError}
       {initialLoading && <CoverPlaceholder className="om-featured-template-skeleton" />}
     </div>}
     {home && <>
+      {props.onStartScenario && props.onOpenScenarioHub && (
+        <ScenarioHighlights onStartScenario={props.onStartScenario} onOpenHub={props.onOpenScenarioHub} />
+      )}
       <ExploreHighlights onChooseStudio={onChooseStudio} onOpenBlackFriday={props.onOpenBlackFriday} />
+      <GameStories onOpenGameStudio={openGameStudio} onBuildGameInSuperAgent={openGameInSuperAgent} />
       <ClaudeStories onClaude={example => props.onMcp('claude', example)} />
     </>}
     {showCommunityPicks && <section aria-labelledby="explore-community">

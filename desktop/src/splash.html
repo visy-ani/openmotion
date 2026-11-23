@@ -1,0 +1,1210 @@
+<!doctype html>
+<!--
+  OpenMotion Desktop Splash
+  Pixel-scan WebGL shader adapted from nexu-io/open-design (Apache-2.0) and
+  packages/design-system/loading.ts, paired with the OpenMotion vector wordmark.
+-->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenMotion</title>
+    <style>
+      :root,
+      html[data-theme="light"] {
+        --sp-bg: #f2f4f5;
+        --sp-surface: #ffffff;
+        --sp-surface-subtle: #e9ecee;
+        --sp-border: rgba(18, 22, 26, 0.11);
+        --sp-text: #1b1d1f;
+        --sp-muted: #7a838a;
+        --sp-step: #9aa2a8;
+        --sp-track: rgba(122, 131, 138, 0.18);
+        --sp-fill: #7a838a;
+        --sp-accent: #007106;
+        --sp-accent-ink: #ffffff;
+        --sp-accent-soft: rgba(0, 113, 6, 0.1);
+        --sp-danger: #dc2626;
+        --sp-danger-bg: #fef2f2;
+        --sp-danger-border: rgba(220, 38, 38, 0.28);
+      }
+
+      html[data-theme="dark"] {
+        --sp-bg: #141517;
+        --sp-surface: #1d1f22;
+        --sp-surface-subtle: #25282c;
+        --sp-border: rgba(255, 255, 255, 0.11);
+        --sp-text: #eef0ed;
+        --sp-muted: #939a9f;
+        --sp-step: #6e757b;
+        --sp-track: rgba(255, 255, 255, 0.12);
+        --sp-fill: #939a9f;
+        --sp-accent: #00ff08;
+        --sp-accent-ink: #071608;
+        --sp-accent-soft: rgba(0, 255, 8, 0.14);
+        --sp-danger: #f87171;
+        --sp-danger-bg: #26181a;
+        --sp-danger-border: rgba(248, 113, 113, 0.32);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--sp-bg);
+        color: var(--sp-text);
+        font-family: "Albert Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+        user-select: none;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      body[data-leaving="true"] {
+        opacity: 0;
+      }
+
+      /* Invisible drag strip at top + quiet close button */
+      .om-drag-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 44px;
+        -webkit-app-region: drag;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 0 14px;
+        z-index: 20;
+      }
+
+      .om-close-btn {
+        -webkit-app-region: no-drag;
+        appearance: none;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--sp-muted);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        font-size: 17px;
+        line-height: 1;
+        opacity: 0.4;
+        transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+      }
+
+      .om-close-btn:hover {
+        opacity: 1;
+        background: var(--sp-surface-subtle);
+        color: var(--sp-text);
+      }
+
+      /* Center stage: keeps the wordmark dead-center during boot */
+      .om-stage {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 0 32px;
+        transition: transform 320ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      #splash-logo {
+        position: relative;
+        height: 48px;
+        width: auto;
+        aspect-ratio: 141.625 / 24;
+        flex-shrink: 0;
+      }
+
+      #splash-logo img,
+      #splash-logo canvas {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+      }
+
+      /* Boot progress bar & step counter (Open Design geometry) */
+      .boot-footer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 54px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        pointer-events: none;
+        transition: opacity 220ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      body[data-mode="signin"] .boot-footer,
+      body[data-mode="error"] .boot-footer {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .boot-progress {
+        width: 200px;
+        height: 3px;
+        border-radius: 999px;
+        background: var(--sp-track);
+        overflow: hidden;
+      }
+
+      .boot-progress-fill {
+        width: 25%;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--sp-fill);
+        transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      .boot-stage {
+        color: var(--sp-muted);
+        font-size: 13px;
+        line-height: 1.4;
+        letter-spacing: 0.015em;
+        text-align: center;
+        transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      .boot-stage-swapping {
+        opacity: 0;
+      }
+
+      .boot-stage-step {
+        color: var(--sp-step);
+        font-variant-numeric: tabular-nums;
+        margin-right: 8px;
+      }
+
+      .boot-dots .dot {
+        display: inline-block;
+        animation: boot-dot 1.4s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+      }
+      .boot-dots .dot:nth-child(2) { animation-delay: 0.2s; }
+      .boot-dots .dot:nth-child(3) { animation-delay: 0.4s; }
+
+      body[data-mode="welcome"] .boot-dots {
+        display: none;
+      }
+
+      @keyframes boot-dot {
+        0%, 60%, 100% { opacity: 0.25; }
+        30% { opacity: 1; }
+      }
+
+      /* Secondary panels (Sign-In & Error Recovery) */
+      .om-panel {
+        display: none;
+        width: 100%;
+        max-width: 440px;
+        margin-top: 40px;
+        padding: 24px 26px;
+        border-radius: 16px;
+        background: var(--sp-surface);
+        border: 1px solid var(--sp-border);
+        flex-direction: column;
+        gap: 16px;
+        text-align: left;
+        -webkit-app-region: no-drag;
+        animation: om-panel-in 260ms cubic-bezier(0.23, 1, 0.32, 1) both;
+      }
+
+      body[data-mode="signin"] .om-panel-signin,
+      body[data-mode="error"] .om-panel-error {
+        display: flex;
+      }
+
+      .om-panel-error {
+        background: var(--sp-danger-bg);
+        border-color: var(--sp-danger-border);
+        align-items: center;
+        text-align: center;
+      }
+
+      .om-panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .om-panel-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--sp-text);
+      }
+
+      .om-panel-sub {
+        margin: 5px 0 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--sp-muted);
+      }
+
+      .om-pill {
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: var(--sp-accent-soft);
+        color: var(--sp-accent);
+      }
+
+      .om-btn[hidden],
+      .om-pill[hidden],
+      .om-auth-code[hidden] {
+        display: none;
+      }
+
+      .om-auth-pending {
+        display: none;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: var(--sp-bg);
+        border: 1px solid var(--sp-border);
+        font-size: 12.5px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .om-auth-pending[data-visible="true"] {
+        display: flex;
+      }
+
+      .om-auth-code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 4px 10px;
+        border-radius: 7px;
+        background: var(--sp-surface);
+        border: 1px solid var(--sp-border);
+        color: var(--sp-accent);
+      }
+
+      .om-signin-error {
+        display: none;
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--sp-danger);
+      }
+
+      .om-signin-error[data-visible="true"] {
+        display: block;
+      }
+
+      .om-error-detail {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--sp-text);
+        max-height: 110px;
+        overflow-y: auto;
+        word-break: break-word;
+      }
+
+      .om-btn-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .om-panel-error .om-btn-row {
+        justify-content: center;
+      }
+
+      .om-btn {
+        appearance: none;
+        border: 1px solid var(--sp-border);
+        border-radius: 10px;
+        background: var(--sp-surface);
+        color: var(--sp-text);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 9px 16px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: border-color 140ms ease, background 140ms ease, transform 100ms ease, opacity 140ms ease;
+      }
+
+      .om-btn:hover:not(:disabled) {
+        border-color: var(--sp-accent);
+      }
+
+      .om-btn:active:not(:disabled) {
+        transform: scale(0.985);
+      }
+
+      .om-btn:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
+      .om-btn-primary {
+        background: var(--sp-accent);
+        color: var(--sp-accent-ink);
+        border-color: transparent;
+      }
+
+      .om-btn-primary:hover:not(:disabled) {
+        opacity: 0.92;
+      }
+
+      @keyframes om-panel-in {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body,
+        .om-stage,
+        .boot-footer,
+        .boot-stage,
+        .boot-progress-fill,
+        .boot-dots .dot,
+        .om-panel {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body data-mode="booting">
+    <div class="om-drag-bar">
+      <button type="button" class="om-close-btn" id="close-splash-btn" aria-label="Close window">&times;</button>
+    </div>
+
+    <main class="om-stage" role="status" aria-live="polite">
+      <div id="splash-logo" role="img" aria-label="OpenMotion">
+        <img id="splash-static-logo" alt="" draggable="false" />
+        <canvas id="splash-canvas" hidden></canvas>
+      </div>
+
+      <!-- Integrated OpenDesign Sign-In Panel -->
+      <section class="om-panel om-panel-signin" id="view-signin" aria-label="Sign in to OpenDesign">
+        <div class="om-panel-head">
+          <div>
+            <h1 class="om-panel-title" id="signin-title">Sign in to OpenDesign</h1>
+            <p class="om-panel-sub" id="signin-subtitle">
+              Connect your account for cloud AI models, live web deployment, and MCP sharing.
+            </p>
+          </div>
+          <span class="om-pill" id="signin-agents-pill" hidden></span>
+        </div>
+
+        <div class="om-auth-pending" id="signin-pending-box" data-visible="false">
+          <div>
+            <strong id="signin-pending-label">Complete sign-in in your browser…</strong>
+            <div class="om-panel-sub" style="margin-top: 2px;">Waiting for OAuth confirmation</div>
+          </div>
+          <span class="om-auth-code" id="signin-user-code" hidden></span>
+        </div>
+
+        <p class="om-signin-error" id="signin-error" data-visible="false"></p>
+
+        <div class="om-btn-row">
+          <button type="button" class="om-btn om-btn-primary" id="signin-start-btn">
+            Sign in with OpenDesign
+          </button>
+          <a class="om-btn" id="signin-browser-link" href="#" target="_blank" rel="noreferrer" hidden>
+            Open browser
+          </a>
+          <button type="button" class="om-btn" id="signin-cancel-btn" hidden>
+            Cancel
+          </button>
+          <button type="button" class="om-btn" id="continue-local-btn">
+            Continue locally
+          </button>
+        </div>
+      </section>
+
+      <!-- Startup Recovery Panel -->
+      <section class="om-panel om-panel-error" id="error-panel" aria-label="Startup error">
+        <h1 class="om-panel-title">Could not start OpenMotion</h1>
+        <p class="om-error-detail" id="error-detail">OpenMotion local engine did not respond.</p>
+        <div class="om-btn-row">
+          <button type="button" class="om-btn om-btn-primary" id="retry-btn">
+            Retry startup
+          </button>
+          <button type="button" class="om-btn" id="export-logs-btn">
+            Export logs
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <div class="boot-footer" id="boot-footer">
+      <div class="boot-progress" aria-hidden="true">
+        <div class="boot-progress-fill" id="boot-progress-fill" data-pct="25" style="width: 25%;"></div>
+      </div>
+      <div class="boot-stage" id="boot-stage">
+        <span class="boot-stage-step" id="boot-stage-step">1/4</span><span id="boot-stage-text">Starting the local engine</span><span class="boot-dots" aria-hidden="true"><span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const requestedTheme = params.get('theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const activeTheme = requestedTheme === 'light' || requestedTheme === 'dark'
+          ? requestedTheme
+          : (prefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', activeTheme);
+
+        // Build exact theme-colored OpenMotion vector wordmark SVG data URL
+        // (verbatim geometry from packages/design-system/brand/openmotion-logo.svg).
+        const inkColor = activeTheme === 'dark' ? '#eef0ed' : '#202020';
+        const wordmarkSvg =
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1416" height="240" viewBox="0 0 141.625 24.00" fill="none">' +
+          '<g fill="' + inkColor + '">' +
+          '<g transform="scale(0.08247423)">' +
+          '<path fill-rule="evenodd" d="M145.5 0C225.857 0 291 65.1426 291 145.5C291 225.857 225.857 291 145.5 291H19.3581C8.64385 291 0.000681982 282.358 0.000616442 271.644C0.000417939 239.193 1.50624e-09 174.523 0 145.5C0 65.1426 65.1426 5.2069e-06 145.5 0ZM145.501 29.1004C81.2147 29.1004 29.1004 81.2147 29.1004 145.501C29.1005 209.786 81.2147 261.9 145.501 261.9C209.786 261.9 261.9 209.786 261.9 145.501C261.9 81.2147 209.786 29.1004 145.501 29.1004Z"/>' +
+          '<path fill-rule="evenodd" d="M137.934 215.04L94.3119 100.247C92.9002 96.5317 96.5286 92.8895 100.219 94.3172L215.067 138.749C219.793 140.578 218.491 147.633 213.427 147.633H146.769V213.4C146.769 218.499 139.744 219.804 137.934 215.04Z"/>' +
+          '</g>' +
+          '<path transform="translate(32.000 18.500) scale(0.020000 -0.020000)" d="M392.58 -7Q318.58 -7 254.42 19Q190.26 45 142.26 92.5Q94.27 140 67.19 205.5Q40.11 271 40.11 349.84Q40.11 428.68 67.19 494.05Q94.27 559.42 142.26 607.11Q190.26 654.8 254.42 680.9Q318.58 707 392.58 707Q466.21 707 530.26 681Q594.31 655 642.18 607.21Q690.04 559.42 717.12 494.05Q744.2 428.68 744.2 349.84Q744.2 271 717.18 205.5Q690.16 140 642.24 92.5Q594.31 45 530.26 19Q466.21 -7 392.58 -7ZM392.84 78.6Q464.11 78.6 520.64 111.87Q577.18 145.13 609.87 206.03Q642.55 266.92 642.55 350Q642.55 433.81 609.87 494.55Q577.18 555.29 520.64 588.34Q464.11 621.4 392.84 621.4Q320.62 621.4 263.88 588.34Q207.13 555.29 174.45 494.56Q141.76 433.84 141.76 350.05Q141.76 267.2 174.53 206.07Q207.31 144.94 263.97 111.77Q320.62 78.6 392.84 78.6Z"/>' +
+          '<path transform="translate(47.156 18.500) scale(0.020000 -0.020000)" d="M156.13 85.4 166.45 87.55V-200H71.8V500H158.13L164.87 424.91Q189.02 459.4 231.42 483.2Q273.82 507 335.47 507Q401.04 507 452.18 475.21Q503.31 443.42 532.44 385.92Q561.58 328.42 561.58 250Q561.58 172.58 533.08 114.79Q504.58 57 453.94 25Q403.31 -7 335.47 -7Q270.4 -7 224.85 19.67Q179.29 46.33 156.13 85.4ZM460.35 250Q460.35 327.33 419.9 374.08Q379.44 420.82 313.69 420.82Q272.47 420.82 239.01 400.84Q205.56 380.87 186 342.91Q166.45 304.96 166.45 250Q166.45 196.04 186 157.8Q205.56 119.56 239.01 99.37Q272.47 79.18 313.69 79.18Q379.44 79.18 419.9 125.92Q460.35 172.67 460.35 250Z"/>' +
+          '<path transform="translate(58.734 18.500) scale(0.020000 -0.020000)" d="M289.31 -7Q217 -7 161.34 26.42Q105.69 59.84 74.4 118.84Q43.11 177.84 43.11 254.42Q43.11 327.42 74.11 384.42Q105.11 441.42 159.69 474.21Q214.27 507 283.27 507Q353 507 406.79 476.42Q460.58 445.84 490.87 391.4Q521.16 336.96 520.31 266.07Q520.31 254.49 519.02 241.62Q517.73 228.75 516.16 214.18H145.91Q149.07 173.53 168.33 143.31Q187.6 113.09 218.35 96.06Q249.09 79.02 288.47 79.02Q337.8 79.02 374.83 98.42Q411.87 117.82 426.98 151.31L509.31 121.84Q479.31 60.58 421.44 26.79Q363.58 -7 289.31 -7ZM416.93 294.78Q416.78 331.42 399.01 360.09Q381.24 388.75 350.87 405.44Q320.49 422.13 282 422.13Q248.36 422.13 219.69 405.73Q191.02 389.33 171.55 360.74Q152.07 332.16 146.91 294.78Z"/>' +
+          '<path transform="translate(69.484 18.500) scale(0.020000 -0.020000)" d="M71.8 500H158.13L163.87 442.29Q188.45 472.93 225.13 489.97Q261.82 507 306.89 507Q365.04 507 407.76 482.5Q450.47 458 473.89 410.08Q497.31 362.16 497.31 290.31V0H402.67V277.84Q402.67 348.33 373.5 384.5Q344.33 420.67 287.69 420.67Q229.62 420.67 198.03 383.15Q166.45 345.64 166.45 272.62V0H71.8Z"/>' +
+          '<path transform="translate(80.203 18.500) scale(0.020000 -0.020000)" d="M178.87 0H79.22V700H189.18L437.62 133.11L685.64 700H795.18V0H695.53V505.6L474.29 0H400.53L178.87 505.6Z"/>' +
+          '<path transform="translate(97.188 18.500) scale(0.020000 -0.020000)" d="M291.27 -7Q219.69 -7 163.4 24.29Q107.11 55.58 75.11 113.08Q43.11 170.58 43.11 249Q43.11 328.42 75.9 386.42Q108.69 444.42 165.77 475.71Q222.84 507 293.84 507Q365.42 507 422.5 475.71Q479.58 444.42 512.94 386.92Q546.31 329.42 546.31 251Q546.31 171.58 512.44 113.58Q478.58 55.58 420.71 24.29Q362.84 -7 291.27 -7ZM290.27 79.02Q329.64 79.02 364.89 97.37Q400.13 115.71 422.61 153.75Q445.09 191.78 445.09 250.58Q445.09 308.64 423.4 346.47Q401.71 384.29 366.97 402.63Q332.22 420.98 292.27 420.98Q252.89 420.98 219.22 402.63Q185.56 384.29 164.95 346.25Q144.33 308.22 144.33 249.42Q144.33 191.36 164.45 153.53Q184.56 115.71 217.72 97.37Q250.89 79.02 290.27 79.02Z"/>' +
+          '<path transform="translate(108.125 18.500) scale(0.020000 -0.020000)" d="M103.8 500V640H199.02V500H323.93V415.55H199.02V170.25Q199.02 124.25 217.37 104.98Q235.71 85.71 264.48 83.16Q293.25 80.6 323.93 84.6V4Q283.2 -5 243.68 -1.29Q204.16 2.42 172.63 21.21Q141.11 40 122.46 76.31Q103.8 112.62 103.8 170.25V415.55H31.69V500Z"/>' +
+          '<path transform="translate(114.766 18.500) scale(0.020000 -0.020000)" d="M87.38 500H181.6V0H87.38ZM135.2 587.87Q108.16 587.87 89.98 606.04Q71.8 624.22 71.8 650.27Q71.8 677.31 89.98 695.49Q108.16 713.67 135.2 713.67Q160.82 713.67 179.21 695.49Q197.6 677.31 197.6 650.27Q197.6 624.22 179.21 606.04Q160.82 587.87 135.2 587.87Z"/>' +
+          '<path transform="translate(119.625 18.500) scale(0.020000 -0.020000)" d="M291.27 -7Q219.69 -7 163.4 24.29Q107.11 55.58 75.11 113.08Q43.11 170.58 43.11 249Q43.11 328.42 75.9 386.42Q108.69 444.42 165.77 475.71Q222.84 507 293.84 507Q365.42 507 422.5 475.71Q479.58 444.42 512.94 386.92Q546.31 329.42 546.31 251Q546.31 171.58 512.44 113.58Q478.58 55.58 420.71 24.29Q362.84 -7 291.27 -7ZM290.27 79.02Q329.64 79.02 364.89 97.37Q400.13 115.71 422.61 153.75Q445.09 191.78 445.09 250.58Q445.09 308.64 423.4 346.47Q401.71 384.29 366.97 402.63Q332.22 420.98 292.27 420.98Q252.89 420.98 219.22 402.63Q185.56 384.29 164.95 346.25Q144.33 308.22 144.33 249.42Q144.33 191.36 164.45 153.53Q184.56 115.71 217.72 97.37Q250.89 79.02 290.27 79.02Z"/>' +
+          '<path transform="translate(130.906 18.500) scale(0.020000 -0.020000)" d="M71.8 500H158.13L163.87 442.29Q188.45 472.93 225.13 489.97Q261.82 507 306.89 507Q365.04 507 407.76 482.5Q450.47 458 473.89 410.08Q497.31 362.16 497.31 290.31V0H402.67V277.84Q402.67 348.33 373.5 384.5Q344.33 420.67 287.69 420.67Q229.62 420.67 198.03 383.15Q166.45 345.64 166.45 272.62V0H71.8Z"/>' +
+          '</g></svg>';
+        const logoDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(wordmarkSvg);
+
+        const host = document.getElementById('splash-logo');
+        const staticImg = document.getElementById('splash-static-logo');
+        const canvas = document.getElementById('splash-canvas');
+        staticImg.src = logoDataUrl;
+
+        const PIXEL_SCAN_VERTEX_SHADER = `
+precision highp float;
+attribute vec3 position;
+void main() { gl_Position = vec4(position, 1.0); }
+`;
+
+        const PIXEL_SCAN_FRAGMENT_SHADER = `
+precision highp float;
+uniform sampler2D src;
+uniform vec2 resolution;
+uniform vec2 offset;
+uniform float time;
+uniform float enterTime;
+uniform float leaveTime;
+
+uniform int mode;
+uniform float speed;
+uniform float delay;
+uniform float width;
+uniform vec3 accent;
+uniform vec3 accent2;
+uniform vec3 baseCol;
+uniform vec2 mouse;
+uniform float hover;
+uniform float spot;
+
+#define TRAIL 24
+uniform vec2 trail[TRAIL];
+uniform float trailW[TRAIL];
+
+#define W width
+#define LAYERS 3.0
+
+vec4 readTex(vec2 uv) {
+  if (uv.x < 0. || uv.x > 1. || uv.y < 0. || uv.y > 1.) return vec4(0);
+  return texture2D(src, uv);
+}
+float hash(vec2 p) { return fract(sin(dot(p, vec2(4859., 3985.))) * 3984.); }
+float sdBox(vec2 p, float r) { vec2 q = abs(p) - r; return min(length(q), max(q.y, q.x)); }
+
+float dir = 1.;
+vec2 mp = vec2(0.);
+vec2 tp[TRAIL];
+
+vec2 pxToP(vec2 px) {
+  vec2 uv = (px - offset) / resolution;
+  vec2 q = uv * 2. - 1.;
+  q.y *= resolution.y / resolution.x;
+  return q;
+}
+
+float toRangeT(vec2 p, float scale) {
+  float d;
+  if (mode == 0) d = p.x / (scale * 2.) + .5;
+  else if (mode == 1) d = 1. - (p.y / (scale * 2.) + .5);
+  else if (mode == 2) d = length(p) / scale;
+  else d = dot(p, vec2(0.7071, 0.7071)) / (scale * 2.) + .5;
+  d = dir > 0. ? d : (1. - d);
+  return d;
+}
+
+vec4 cell(vec2 p, vec2 pi, float scale, float t, float edge) {
+  vec2 pc = pi + .5;
+  vec2 uvc = pc / scale;
+  uvc.y /= resolution.y / resolution.x;
+  uvc = uvc * 0.5 + 0.5;
+  if (uvc.x < 0. || uvc.x > 1. || uvc.y < 0. || uvc.y > 1.) return vec4(0);
+  float alpha = smoothstep(.0, .1, texture2D(src, uvc).a);
+
+  float x = toRangeT(pi, scale);
+  float n = hash(pi);
+  float SPREAD = W * 2.2;
+  float anim = smoothstep(W * 2., .0, abs(x + n * SPREAD - t));
+
+  vec2 cellP = pc / scale;
+  float spotA = 0.;
+  for (int i = 0; i < TRAIL; i++) {
+    float w = trailW[i];
+    if (w <= 0.) continue;
+    vec2 rel = cellP - tp[i];
+    float ang = atan(rel.y, rel.x);
+    float wob = 1. + 0.30 * sin(3. * ang + time * 1.6) + 0.16 * sin(5. * ang - time * 1.1 + 1.3);
+    float reach = spot * 0.8 * wob;
+    spotA = max(spotA, smoothstep(reach, reach * 0.4, length(rel)) * w);
+  }
+  anim = max(anim, spotA * hover);
+
+  float tone = 0.5 + 0.5 * sin(time * 2.0 + n * 6.2831) + 0.18 * sin(time * 3.7 + n * 12.566);
+  tone = clamp(tone, 0., 1.);
+  vec3 cellAccent = mix(accent, accent2, tone);
+  vec4 color = vec4(mix(baseCol, cellAccent, anim), 1.) * anim;
+
+  float pull = hover * smoothstep(spot * 1.4, 0., length(cellP - mp));
+  vec2 mag = normalize(mp - cellP + 1e-5) * pull * 0.18;
+  vec2 bp = p - pc - mag;
+
+  float sd = sdBox(bp, .38);
+  color *= mix(1., clamp(.3 / abs(sd), 0., 10.), edge * pow(anim, 9.));
+  color += vec4(cellAccent, 1.) * anim * smoothstep(.55, .0, abs(sd)) * 0.07;
+
+  return color * alpha;
+}
+
+vec4 cellsColor(vec2 p, float scale, float t) {
+  vec2 pi = floor(p);
+  vec2 d = vec2(0, 1);
+  vec4 cc = vec4(0);
+  cc += cell(p, pi, scale, t, .2) * 4.;
+  cc += cell(p, pi + d.xy, scale, t, .9);
+  cc += cell(p, pi - d.xy, scale, t, .9);
+  cc += cell(p, pi + d.yx, scale, t, .9);
+  cc += cell(p, pi - d.yx, scale, t, .9);
+  return cc / 8.;
+}
+
+vec4 draw(vec2 uv, vec2 p, float t, float scale) {
+  vec4 c = readTex(uv);
+  vec2 pi = floor(p * scale);
+  float n = hash(pi);
+  t = t * (1. + W * 4.) - W * 2.;
+  float x = toRangeT(pi, scale);
+  float a1 = smoothstep(t, t - W, x + n * W);
+  c *= a1;
+  c += cellsColor(p * scale, scale, t) * 1.1;
+  return c;
+}
+
+void main() {
+  vec2 uv = (gl_FragCoord.xy - offset) / resolution;
+  vec2 p = uv * 2. - 1.;
+  p.y *= resolution.y / resolution.x;
+
+  mp = pxToP(mouse);
+  for (int i = 0; i < TRAIL; i++) tp[i] = pxToP(trail[i]);
+
+  float t;
+  if (leaveTime > 0.) { dir = -1.; t = clamp(leaveTime * speed, 0., 1.); }
+  else { t = clamp((enterTime - delay) * speed, 0., 1.); }
+  t = (fract(t * .99999) - 0.5) * dir + 0.5;
+
+  for (float i = 0.; i < LAYERS; i++) {
+    float s = cos(i) * 11. + 32.;
+    gl_FragColor += draw(uv, p, t, abs(s));
+  }
+  gl_FragColor /= LAYERS;
+  gl_FragColor *= smoothstep(0., 0.01, t);
+}
+`;
+
+        let raf = 0;
+        let stopped = false;
+        let freezeStatic = false;
+        let activeDisposePixelScan = null;
+        const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+        function disposePixelScan() {
+          if (raf) {
+            cancelAnimationFrame(raf);
+            raf = 0;
+          }
+          if (activeDisposePixelScan) {
+            const cleanup = activeDisposePixelScan;
+            activeDisposePixelScan = null;
+            cleanup();
+          }
+        }
+
+        function showStaticLogo() {
+          disposePixelScan();
+          canvas.hidden = true;
+          staticImg.hidden = false;
+        }
+
+        function startPixelScan() {
+          if (stopped || freezeStatic || document.hidden || motionQuery.matches || !staticImg.complete || !staticImg.naturalWidth) {
+            showStaticLogo();
+            return;
+          }
+          disposePixelScan();
+
+          let gl = null;
+          try {
+            gl = canvas.getContext('webgl', {
+              alpha: true,
+              antialias: false,
+              premultipliedAlpha: true,
+              preserveDrawingBuffer: false,
+            });
+          } catch {
+            showStaticLogo();
+            return;
+          }
+          if (!gl) {
+            showStaticLogo();
+            return;
+          }
+
+          const program = gl.createProgram();
+          const vs = gl.createShader(gl.VERTEX_SHADER);
+          const fs = gl.createShader(gl.FRAGMENT_SHADER);
+          const buffer = gl.createBuffer();
+          const texture = gl.createTexture();
+          if (!program || !vs || !fs || !buffer || !texture) {
+            showStaticLogo();
+            return;
+          }
+
+          gl.shaderSource(vs, PIXEL_SCAN_VERTEX_SHADER);
+          gl.compileShader(vs);
+          gl.shaderSource(fs, PIXEL_SCAN_FRAGMENT_SHADER);
+          gl.compileShader(fs);
+          if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS) || !gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+            showStaticLogo();
+            return;
+          }
+          gl.attachShader(program, vs);
+          gl.attachShader(program, fs);
+          gl.linkProgram(program);
+          if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            showStaticLogo();
+            return;
+          }
+
+          gl.useProgram(program);
+          gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+          gl.bufferData(
+            gl.ARRAY_BUFFER,
+            new Float32Array([-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0]),
+            gl.STATIC_DRAW,
+          );
+          const posLoc = gl.getAttribLocation(program, 'position');
+          gl.enableVertexAttribArray(posLoc);
+          gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+          const u = name => gl.getUniformLocation(program, name);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          gl.uniform1i(u('src'), 0);
+          gl.uniform2f(u('offset'), 0, 0);
+          gl.uniform1f(u('leaveTime'), 0);
+          gl.uniform1i(u('mode'), 3);
+          gl.uniform1f(u('speed'), 1);
+          gl.uniform1f(u('delay'), 0);
+          gl.uniform1f(u('width'), 0.2);
+          gl.uniform3f(u('accent'), 0.529, 0.918, 0.361);
+          gl.uniform3f(u('accent2'), 0.816, 1.0, 0.71);
+          gl.uniform3f(u('baseCol'), 0.184, 0.471, 0.114);
+          gl.uniform2f(u('mouse'), -10000, -10000);
+          gl.uniform1f(u('hover'), 0);
+          gl.uniform1f(u('spot'), 0.28);
+          gl.uniform2fv(u('trail[0]'), new Float32Array(48).fill(-10000));
+          gl.uniform1fv(u('trailW[0]'), new Float32Array(24));
+
+          let offscreen = document.createElement('canvas');
+          let ctx = offscreen.getContext('2d');
+          if (!ctx) {
+            showStaticLogo();
+            return;
+          }
+
+          let sizedW = 0;
+          let sizedH = 0;
+          let disposed = false;
+          const resLoc = u('resolution');
+          const timeLoc = u('time');
+          const enterLoc = u('enterTime');
+
+          function resize() {
+            if (disposed || !ctx || !offscreen) return;
+            const rect = host.getBoundingClientRect();
+            const dpr = Math.min(2, window.devicePixelRatio || 1);
+            const nw = Math.round(rect.width * dpr);
+            const nh = Math.round(rect.height * dpr);
+            if (nw < 2 || nh < 2 || (nw === sizedW && nh === sizedH)) return;
+            sizedW = offscreen.width = canvas.width = nw;
+            sizedH = offscreen.height = canvas.height = nh;
+            const scale = Math.min(nw / staticImg.naturalWidth, nh / staticImg.naturalHeight);
+            const dw = staticImg.naturalWidth * scale;
+            const dh = staticImg.naturalHeight * scale;
+            ctx.clearRect(0, 0, nw, nh);
+            ctx.drawImage(staticImg, (nw - dw) / 2, (nh - dh) / 2, dw, dh);
+            gl.viewport(0, 0, nw, nh);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.uniform2f(resLoc, nw, nh);
+          }
+
+          const started = performance.now();
+          let cycle = started;
+          let lastRender = 0;
+
+          function frame(now) {
+            if (disposed || stopped || freezeStatic || document.hidden || gl.isContextLost()) {
+              raf = 0;
+              return;
+            }
+            if (now - lastRender >= 32) {
+              lastRender = now;
+              resize();
+              if (sizedW) {
+                const elapsed = (now - cycle) / 1000;
+                let enter = 2;
+                if (elapsed <= 2.6) {
+                  enter = 0.06 + (1 - Math.pow(1 - elapsed / 2.6, 2)) * 0.94;
+                } else if (elapsed > 3.7) {
+                  cycle = now;
+                  enter = 0.06;
+                }
+                gl.uniform1f(timeLoc, (now - started) / 1000);
+                gl.uniform1f(enterLoc, enter);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                staticImg.hidden = true;
+                canvas.hidden = false;
+              }
+            }
+            raf = requestAnimationFrame(frame);
+          }
+
+          let resizeObserver = null;
+          if (typeof ResizeObserver === 'function') {
+            resizeObserver = new ResizeObserver(resize);
+            resizeObserver.observe(host);
+          }
+          const onContextLost = event => {
+            event.preventDefault();
+            showStaticLogo();
+          };
+          window.addEventListener('resize', resize);
+          canvas.addEventListener('webglcontextlost', onContextLost);
+
+          activeDisposePixelScan = () => {
+            disposed = true;
+            if (resizeObserver) {
+              resizeObserver.disconnect();
+              resizeObserver = null;
+            }
+            window.removeEventListener('resize', resize);
+            canvas.removeEventListener('webglcontextlost', onContextLost);
+            try {
+              gl.deleteTexture(texture);
+              gl.deleteBuffer(buffer);
+              gl.deleteShader(vs);
+              gl.deleteShader(fs);
+              gl.deleteProgram(program);
+              const loseCtx = gl.getExtension('WEBGL_lose_context');
+              loseCtx?.loseContext();
+            } catch {
+              // Ignore WebGL cleanup failure on destroyed context.
+            }
+            offscreen = null;
+            ctx = null;
+            gl = null;
+          };
+
+          raf = requestAnimationFrame(frame);
+        }
+
+        function onReducedMotionChange() {
+          if (motionQuery.matches) showStaticLogo();
+          else startPixelScan();
+        }
+
+        function onVisibilityChange() {
+          if (document.hidden) {
+            if (raf) {
+              cancelAnimationFrame(raf);
+              raf = 0;
+            }
+          } else if (!stopped && !freezeStatic && !motionQuery.matches) {
+            startPixelScan();
+          }
+        }
+
+        staticImg.addEventListener('load', startPixelScan);
+        if (staticImg.complete && staticImg.naturalWidth) {
+          startPixelScan();
+        }
+        motionQuery.addEventListener('change', onReducedMotionChange);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
+        window.__omSplashStopLogo = function () {
+          stopped = true;
+          showStaticLogo();
+        };
+
+        // Splash stage + integrated sign-in / recovery controller
+        const STEP_META = {
+          engine: { index: 1, total: 4, pct: 25 },
+          agents: { index: 2, total: 4, pct: 55 },
+          account: { index: 3, total: 4, pct: 80 },
+          ready: { index: 4, total: 4, pct: 100 },
+        };
+
+        let pollTimer = null;
+        const desktop = () => window.__OPENMOTION_DESKTOP__;
+
+        function renderAccountState(account) {
+          const startBtn = document.getElementById('signin-start-btn');
+          const cancelBtn = document.getElementById('signin-cancel-btn');
+          const browserLink = document.getElementById('signin-browser-link');
+          const pendingBox = document.getElementById('signin-pending-box');
+          const pendingLabel = document.getElementById('signin-pending-label');
+          const codeEl = document.getElementById('signin-user-code');
+          const errEl = document.getElementById('signin-error');
+          const titleEl = document.getElementById('signin-title');
+
+          if (!account) return;
+          const isAuth = account.state === 'authorizing';
+          const isExpired = account.state === 'reauth-required';
+
+          if (titleEl) {
+            titleEl.textContent = isExpired
+              ? 'OpenDesign sign-in expired'
+              : isAuth
+                ? 'Authorizing OpenDesign…'
+                : 'Sign in to OpenDesign';
+          }
+
+          if (pendingBox) pendingBox.dataset.visible = isAuth ? 'true' : 'false';
+          if (pendingLabel) {
+            pendingLabel.textContent = account.syncing
+              ? 'Authorized — syncing your workspace…'
+              : 'Complete sign-in in your browser…';
+          }
+
+          if (codeEl) {
+            if (account.userCode && !account.syncing) {
+              codeEl.textContent = account.userCode;
+              codeEl.hidden = false;
+            } else {
+              codeEl.hidden = true;
+            }
+          }
+
+          if (startBtn) {
+            startBtn.hidden = isAuth;
+            startBtn.disabled = false;
+            startBtn.textContent = isExpired ? 'Sign in again' : 'Sign in with OpenDesign';
+          }
+          if (cancelBtn) cancelBtn.hidden = !isAuth || Boolean(account.syncing);
+          if (browserLink) {
+            if (isAuth && account.authorizationUrl && !account.syncing) {
+              browserLink.href = account.authorizationUrl;
+              browserLink.hidden = false;
+            } else {
+              browserLink.hidden = true;
+            }
+          }
+          if (errEl) {
+            if (!isAuth && account.error) {
+              errEl.textContent = account.error;
+              errEl.dataset.visible = 'true';
+            } else {
+              errEl.dataset.visible = 'false';
+            }
+          }
+
+          if (isAuth && !pollTimer) {
+            pollTimer = setInterval(async () => {
+              const api = desktop();
+              if (!api?.splashRefreshAccount) return;
+              try {
+                const updated = await api.splashRefreshAccount();
+                if (updated?.state === 'signed-in') {
+                  clearInterval(pollTimer);
+                  pollTimer = null;
+                  window.__updateDesktopSplash({
+                    step: 'ready',
+                    mode: 'welcome',
+                    status: 'Opening OpenMotion Studio',
+                    account: {
+                      state: 'signed-in',
+                      name: updated.user?.name,
+                      email: updated.user?.email,
+                      plan: updated.plan,
+                    },
+                  });
+                  setTimeout(() => {
+                    void api.splashContinueToStudio?.();
+                  }, 480);
+                } else {
+                  renderAccountState(updated);
+                }
+              } catch {
+                // Retry on next tick.
+              }
+            }, 1300);
+          } else if (!isAuth && pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+          }
+        }
+
+        window.__updateDesktopSplash = function (progress) {
+          if (!progress || typeof progress !== 'object') return;
+          const mode = progress.mode || (progress.errorMessage ? 'error' : 'booting');
+          document.body.setAttribute('data-mode', mode);
+
+          // During interactive sign-in or error recovery, settle on the crisp assembled wordmark.
+          const shouldFreeze = mode === 'signin' || mode === 'error';
+          if (shouldFreeze !== freezeStatic) {
+            freezeStatic = shouldFreeze;
+            if (freezeStatic) showStaticLogo();
+            else startPixelScan();
+          }
+
+          const meta = STEP_META[progress.step] || STEP_META.engine;
+          const fillEl = document.getElementById('boot-progress-fill');
+          const stepEl = document.getElementById('boot-stage-step');
+          const textEl = document.getElementById('boot-stage-text');
+
+          if (fillEl) {
+            const prevPct = Number(fillEl.dataset.pct || '0');
+            const nextPct = mode === 'booting' ? Math.max(prevPct, meta.pct) : meta.pct;
+            fillEl.dataset.pct = String(nextPct);
+            fillEl.style.width = nextPct + '%';
+          }
+          if (stepEl) {
+            stepEl.textContent = meta.index + '/' + meta.total;
+          }
+          if (textEl) {
+            let cleanLabel = String(progress.status || 'Starting the local engine').replace(/[.…]+$/, '');
+            if (mode === 'welcome' && progress.account) {
+              const who = progress.account.name || progress.account.email || '';
+              if (who) cleanLabel = 'Welcome back, ' + who;
+            }
+            textEl.textContent = cleanLabel;
+          }
+
+          if (mode === 'signin') {
+            const pill = document.getElementById('signin-agents-pill');
+            if (pill && typeof progress.agentsCount === 'number' && progress.agentsCount > 0) {
+              pill.textContent = progress.agentsCount + ' local AI agent' + (progress.agentsCount === 1 ? '' : 's') + ' ready';
+              pill.hidden = false;
+            }
+            renderAccountState(progress.account || { state: 'signed-out' });
+          }
+
+          if (mode === 'error') {
+            const detail = document.getElementById('error-detail');
+            if (detail && progress.errorMessage) {
+              detail.textContent = progress.errorMessage;
+            }
+          }
+        };
+
+        document.getElementById('close-splash-btn')?.addEventListener('click', () => {
+          window.close();
+        });
+
+        document.getElementById('retry-btn')?.addEventListener('click', () => {
+          const fillEl = document.getElementById('boot-progress-fill');
+          if (fillEl) {
+            fillEl.dataset.pct = '25';
+            fillEl.style.width = '25%';
+          }
+          window.__updateDesktopSplash({
+            step: 'engine',
+            mode: 'booting',
+            status: 'Starting the local engine',
+          });
+          const api = desktop();
+          if (api?.splashRetry) {
+            void api.splashRetry();
+          } else {
+            window.location.hash = 'retry=' + Date.now();
+          }
+        });
+
+        document.getElementById('export-logs-btn')?.addEventListener('click', async () => {
+          const api = desktop();
+          if (api?.exportLogs) {
+            await api.exportLogs();
+          }
+        });
+
+        document.getElementById('continue-local-btn')?.addEventListener('click', () => {
+          const api = desktop();
+          if (api?.splashContinueToStudio) {
+            void api.splashContinueToStudio();
+          }
+        });
+
+        document.getElementById('signin-start-btn')?.addEventListener('click', async () => {
+          const btn = document.getElementById('signin-start-btn');
+          const api = desktop();
+          if (!api?.splashStartSignIn) return;
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Opening browser…';
+          }
+          try {
+            const account = await api.splashStartSignIn();
+            renderAccountState(account);
+          } catch (err) {
+            renderAccountState({
+              state: 'signed-out',
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        });
+
+        document.getElementById('signin-cancel-btn')?.addEventListener('click', async () => {
+          const api = desktop();
+          if (!api?.splashCancelSignIn) return;
+          try {
+            const account = await api.splashCancelSignIn();
+            renderAccountState(account);
+          } catch {
+            // Ignore cancel failure.
+          }
+        });
+
+        document.getElementById('signin-browser-link')?.addEventListener('click', event => {
+          const link = document.getElementById('signin-browser-link');
+          const href = link?.getAttribute('href');
+          const api = desktop();
+          if (href && href !== '#' && api?.openExternal) {
+            event.preventDefault();
+            void api.openExternal(href);
+          }
+        });
+
+        // Optional static preview mode for visual verification in browser
+        const previewMode = params.get('preview');
+        if (previewMode === 'signin') {
+          window.__updateDesktopSplash({
+            step: 'account',
+            mode: 'signin',
+            status: 'Checking OpenDesign account',
+            agentsCount: 3,
+            account: { state: 'signed-out' },
+          });
+        } else if (previewMode === 'authorizing') {
+          window.__updateDesktopSplash({
+            step: 'account',
+            mode: 'signin',
+            status: 'Authorizing OpenDesign',
+            agentsCount: 3,
+            account: {
+              state: 'authorizing',
+              userCode: 'OM-49K2',
+              authorizationUrl: 'https://open-design.app/auth/device',
+            },
+          });
+        } else if (previewMode === 'welcome') {
+          window.__updateDesktopSplash({
+            step: 'ready',
+            mode: 'welcome',
+            status: 'Opening OpenMotion Studio',
+            account: { state: 'signed-in', name: 'OpenMotion Creator' },
+          });
+        } else if (previewMode === 'error') {
+          window.__updateDesktopSplash({
+            step: 'engine',
+            mode: 'error',
+            status: 'Startup paused',
+            errorMessage: 'OpenMotion backend process exited before becoming healthy.',
+          });
+        }
+
+        function teardownSplashResources() {
+          stopped = true;
+          if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+          }
+          motionQuery.removeEventListener('change', onReducedMotionChange);
+          document.removeEventListener('visibilitychange', onVisibilityChange);
+          disposePixelScan();
+        }
+
+        window.addEventListener('pagehide', teardownSplashResources);
+        window.addEventListener('beforeunload', teardownSplashResources);
+      })();
+    </script>
+  </body>
+</html>

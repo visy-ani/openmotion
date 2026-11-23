@@ -1,3 +1,4 @@
+import { gameTools } from './game-tools.ts';
 import { ToolInputError } from './tool-input-error.ts';
 import { inlineVideoUri } from './inline-video.ts';
 import { templateGuideDraftSchema } from './template-guide.ts';
@@ -25,6 +26,7 @@ const display = object({ revision, versionId: id, previewUrl: { type: 'string', 
 const read = { readOnlyHint: true, openWorldHint: false };
 const write = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 export const phase1Tools = [
+  ...gameTools,
   workspaceAssetUseTool,
   assetLibraryTool,
   projectArchiveTool,

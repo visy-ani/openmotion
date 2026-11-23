@@ -9,7 +9,7 @@ import { TemplateGalleryCard } from './TemplateGalleryCard';
 import { useTemplatePlayback } from './useTemplatePlayback';
 import { useWorkspaceChrome } from './WorkspaceChromeContext';
 
-const collections = { shorts: 'short-form', marketing: 'ads', explainer: 'all', '3d': 'all' } as const;
+const collections = { shorts: 'short-form', marketing: 'ads', explainer: 'all', '3d': 'all', game: 'all' } as const;
 
 // The catalogue searches the localized title, tags and description returned for this locale.
 const explainerTerms: Record<Locale, string> = {

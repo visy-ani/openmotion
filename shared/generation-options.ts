@@ -28,6 +28,29 @@ const cloudSpeechVoices: Record<string, { value: string; label: string; previewU
     ['pFZP5JQG7iQjIQuC4Bku', 'Lily · Female', 'https://storage.googleapis.com/eleven-public-prod/premade/voices/pFZP5JQG7iQjIQuC4Bku/89b68b35-b3dd-4348-a84a-a3c13a3c2b30.mp3'],
   ].map(([value, label, previewUrl]) => ({ value, label, previewUrl })),
 };
+const knownVoiceLabels = new Map<string, string>(
+  Object.values(cloudSpeechVoices).flat().map(voice => [voice.value, voice.label.split('·')[0].trim()]),
+);
+
+/** Resolve a readable voice name for known built-in speech voices (independent of catalogue state). */
+export function knownSpeechVoiceName(voiceId: unknown): string | undefined {
+  if (typeof voiceId !== 'string' || !voiceId.trim()) return undefined;
+  const trimmed = voiceId.trim();
+  const matched = knownVoiceLabels.get(trimmed);
+  if (matched) return matched;
+  const kokoro = trimmed.match(/^([ab])([fm])_(.+)$/i);
+  if (kokoro) return kokoro[3].charAt(0).toUpperCase() + kokoro[3].slice(1);
+  return undefined;
+}
+
+/** Resolve the default built-in voice ID for a speech model ID when no override was supplied. */
+export function defaultSpeechVoiceId(modelId?: string): string | undefined {
+  if (!modelId) return undefined;
+  const bare = modelId.includes(':') ? modelId.slice(modelId.indexOf(':') + 1) : modelId;
+  if (Object.hasOwn(cloudSpeechVoices, bare)) return cloudSpeechVoices[bare]?.[0]?.value;
+  if (bare === 'fal-ai/kokoro/american-english') return 'af_heart';
+  return undefined;
+}
 const cloudSpeech = (model: Model) => ['opendesign', 'account'].includes(model.provider) && model.mode === 'text-to-speech';
 // Own keys only: a model ID such as `constructor` must not resolve to an Object prototype member.
 const checkedVoices = (model: Model) => Object.hasOwn(cloudSpeechVoices, model.modelId) ? cloudSpeechVoices[model.modelId] : undefined;
@@ -217,19 +240,29 @@ export function defaultVideoAudioEnabled(model: Model): boolean {
     && (publishedAudioToggle(model)?.default === true || alwaysOnVideoAudioModels.has(model.modelId));
 }
 
+const qualityChoiceOrder = ['low', 'medium', 'high'] as const;
+
 /** The fields each production OpenDesign image model honours, measured 2026-11-20 ("OpenDesign API image model
  * capabilities, tested"). GPT Image 2.6 ignores sizes and ratios; Seedream rejects any ratio but 1:1, so neither
  * shows one. `background` offers only "transparent", the value background removal sends. */
 function openDesignImageFields(model: Model): GenerationOption[] | undefined {
   if (/^gpt-image-2\.6-/.test(model.modelId)) {
     const published = publishedStrings(model.nativeOptions?.quality);
+    const values = [...(published?.values ?? qualityChoiceOrder)].sort((a, b) => {
+      const ia = qualityChoiceOrder.indexOf(a as (typeof qualityChoiceOrder)[number]);
+      const ib = qualityChoiceOrder.indexOf(b as (typeof qualityChoiceOrder)[number]);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return 0;
+    });
     return [
-      choice('quality', 'Quality', published?.values ?? ['low', 'medium', 'high'], published?.default ?? 'low'),
+      choice('quality', 'Quality', values, published?.default ?? 'low'),
       { ...choice('background', 'Background', []), choices: [{ value: 'transparent', label: 'Transparent' }] },
     ];
   }
-  if (model.modelId === 'seedream-5.0-flash') return [choice('size', 'Image size', ['1K', '1.5K', '2K'], '1K')];
-  if (model.modelId === 'seedream-5.5') return [choice('size', 'Image size', ['1K', '2K'], '1K')];
+  if (model.modelId === 'seedream-5.0-flash') return [choice('size', 'Resolution', ['1K', '1.5K', '2K'], '1K')];
+  if (model.modelId === 'seedream-5.5') return [choice('size', 'Resolution', ['1K', '2K'], '1K')];
   return undefined;
 }
 
@@ -286,7 +319,10 @@ export function generationOptions(model: Model, hasInputImage = false): Generati
       if (resolutions.length) imageFields.push(choice('resolution', 'Resolution', resolutions, profiles.default?.resolution));
     } else {
       const sizes = publishedStrings(model.nativeOptions?.sizes);
-      if (sizes) imageFields.push(choice('size', 'Image size', sizes.values, sizes.default));
+      if (sizes) {
+        const resolutionTiers = sizes.values.every(value => /^\d+(?:\.\d+)?K$/i.test(value));
+        imageFields.push(choice('size', resolutionTiers ? 'Resolution' : 'Image size', sizes.values, sizes.default));
+      }
     }
     const quality = publishedStrings(model.nativeOptions?.quality);
     if (quality) imageFields.push(choice('quality', 'Quality', quality.values, quality.default));

@@ -127,6 +127,22 @@ try{
  assert.equal(designEdited.version.label,'v2');
  const designComment=await tool('openmotion_design_comments',{action:'create',projectId:designCreated.project.id,requestId:'design-comment-1',expectedRevision:designEdited.project.revision,text:'Check contrast',anchor:{filePath:'index.html',viewport:{id:'desktop',width:1280,height:800},element:{selector:'h1',tagName:'h1',label:'Packaged Design',box:{x:10,y:10,width:200,height:40}}}});
  assert.equal(designComment.comment.status,'open');
+ // Game Studio: a single-player draft from the packaged arcade-2d kit, through build checks to local publication.
+ const game=await tool('openmotion_game_create',{prompt:'Packaged smoke: one-button space dodge',multiplayer:false,genre:'casual',style:'minimal',setting:'space'});
+ const gameId=game.game.id;assert.match(game.agentInstruction,new RegExp(gameId));
+ assert.equal((await tool('openmotion_game_get',{id:gameId})).status,'draft');
+ await tool('openmotion_game_set_status',{id:gameId,status:'building'});
+ const gamePage=await tool('openmotion_game_read_file',{id:gameId,path:'index.html'});assert.ok(gamePage.content.length>100);
+ await tool('openmotion_game_write_files',{id:gameId,files:[{path:'index.html',content:gamePage.content.replace('</title>',' · packaged</title>')}]});
+ await tool('openmotion_game_update_meta',{id:gameId,title:'Packaged smoke',description:'One-button dodge used by the packaged smoke test.',controls:'Space or tap'});
+ const gameSim=await tool('openmotion_game_simulate',{id:gameId,players:1,scripts:'reference',maxTicks:3000});assert.ok(gameSim,'simulate returned no result');
+ const gamePlay=await tool('openmotion_game_playtest',{id:gameId,clients:1,durationMs:1500});assert.ok(Array.isArray(gamePlay.clients),JSON.stringify(gamePlay).slice(0,400));
+ await tool('openmotion_game_capture_cover',{id:gameId});
+ assert.equal((await tool('openmotion_game_validate',{id:gameId})).passed,true);
+ await tool('openmotion_game_set_status',{id:gameId,status:'ready'});
+ assert.equal((await tool('openmotion_game_publish',{id:gameId})).game.status,'published');
+ const gameTrailer=await tool('openmotion_game_trailer',{id:gameId,action:'start'});assert.ok(gameTrailer.status);
+ assert.ok((await tool('openmotion_game_trailer',{id:gameId,action:'status'})).status);
  assert.deepEqual([...calledTools].sort(),[...expected].sort(),'E2E must successfully call every public Tool');
  await copyFile(completed.path,path.join(evidence,'export.mp4'));
  report={status:'passed',executionEnvironment:process.env.CI?'ci':'local',version:init.serverInfo.version,archive,archiveSHA256:createHash('sha256').update(await readFile(archive)).digest('hex'),work,root,data,tools:names,skills:(await readdir(path.join(root,'skills'))).sort(),checks:{inlineUiPackaged:true,inlineMediaVersionAndHash:true,mediaOmittedFromModelText:true,isolatedExtraction:true,noWorktreeNodeModules:true,freshLockedRuntimeInstall:true,fontImportWithLicense:true,allPublicToolsCalled:true,hiddenCallsRejected:true,pinnedGuideResource:true,creationReplay:true,libraryImportReplay:true,pinnedLibraryProjectImport:true,realAttachment:true,restoreRetainsLaterVersions:true,studioPreview:true,verifiedAudioMP4:true,actualMotionFrames:true,cancelledExport:true,historicalCompletedResult:true},export:{id:completed.id,path:completed.path,downloadUrl:completed.downloadUrl,verification:completed.verification},notRun:['independent_player_audio_review','four_hosts_model_turn','other_platforms','publish']};

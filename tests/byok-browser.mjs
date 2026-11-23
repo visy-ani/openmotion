@@ -49,7 +49,7 @@ try {
   page = await browser.newPage(); page.on('pageerror', error => errors.push(error.message));
   await page.setViewport({ width: 1440, height: 1000 });
   await page.evaluateOnNewDocument(() => { localStorage.setItem('motion.studio.locale', 'en'); });
-  await page.goto(new URL('/?page=editor', origin).href, { waitUntil: 'domcontentloaded' });
+  await page.goto(new URL('/editor', origin).href, { waitUntil: 'domcontentloaded' });
   const clickText = async (selector, text) => {
     const handle = await page.waitForFunction((selector, text) => [...document.querySelectorAll(selector)].find(node => {
       const label = node.cloneNode(true);
@@ -240,7 +240,7 @@ try {
   await gateway.listModels({ provider: 'opendesign', refresh: true });
   await gateway.setRoute('image', 'opendesign:cloud-image-fixture');
   await page.setViewport({ width: 1440, height: 1000 });
-  const assetsUrl = new URL(origin); assetsUrl.searchParams.set('page', 'assets');
+  const assetsUrl = new URL('/assets', origin);
   await page.goto(assetsUrl.href, { waitUntil: 'domcontentloaded' });
   await clickText('.om-asset-actions button', 'AI Create');
   await page.waitForFunction(() => document.querySelector('.om-asset-composer')?.textContent.includes('Image editing capability is unknown'));

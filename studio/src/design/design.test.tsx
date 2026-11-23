@@ -3,11 +3,14 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n/I18n';
+import { NearScreenIntersectionObserver } from '../hooks/intersectionObserverTestUtils';
 import { readWorkspacePage, workspacePageHref } from '../motion/workspacePageRouting';
 import { CodeViewer } from './CodeViewer';
 import { DesignApiError, designClient } from './designClient';
 import { DesignProjectEditor, buildPresenterPopupHtml, overlayLocalPoint } from './DesignProjectEditor';
 import { DesignProjectList } from './DesignProjectList';
+import { DesignTemplateDetailModal } from './DesignTemplateDetailModal';
+import { ScaledPreviewThumb, MAX_ACTIVE_THUMBS } from './ScaledPreviewThumb';
 import { buildBridgeSrcDoc, looksLikeDeck, parseDeckSlides, parseSpeakerNotes } from './previewBridge';
 
 const projectId = '22222222-2222-4222-8222-222222222222';
@@ -100,7 +103,21 @@ describe('Design Studio client, bridge and routing', () => {
     expect(editor.studio).toBeNull();
 
     const href = workspacePageHref('http://localhost/?page=explore', { designScene: 'deck', designProject: projectId });
-    expect(href).toBe(`/?page=design&scene=deck&designProject=${projectId}`);
+    expect(href).toBe(`/design/projects/${projectId}?scene=deck`);
+    const parsedDeckProject = new URL(href, 'http://localhost');
+    expect(readWorkspacePage(parsedDeckProject.search, parsedDeckProject.hash, parsedDeckProject.pathname)).toMatchObject({
+      designScene: 'deck',
+      designProject: projectId,
+      studio: null,
+    });
+    const projectsHref = workspacePageHref('http://localhost/?page=explore', { designScene: 'projects', designProject: projectId });
+    expect(projectsHref).toBe(`/design/projects/${projectId}`);
+    const parsedProjectsEditor = new URL(projectsHref, 'http://localhost');
+    expect(readWorkspacePage(parsedProjectsEditor.search, parsedProjectsEditor.hash, parsedProjectsEditor.pathname)).toMatchObject({
+      designScene: 'projects',
+      designProject: projectId,
+      studio: null,
+    });
   });
 });
 
@@ -474,5 +491,121 @@ describe('DesignProjectEditor', () => {
 
     expect(container.textContent).not.toContain('Loading file');
     expect(container.querySelector('.om-design-code-pre')).toBeTruthy();
+  });
+
+  it('unmounts ScaledPreviewThumb iframe when inactive and renders a single preview iframe in DesignTemplateDetailModal', async () => {
+    vi.stubGlobal('IntersectionObserver', NearScreenIntersectionObserver);
+    try {
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <ScaledPreviewThumb
+              active
+              src="/motion-api/design/catalog/templates/sample/preview/index.html"
+              title="Sample"
+            />
+          </I18nProvider>,
+        );
+        await Promise.resolve();
+      });
+      expect(container.querySelector('iframe')?.getAttribute('src')).toContain('?thumb=1');
+
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <ScaledPreviewThumb
+              active={false}
+              src="/motion-api/design/catalog/templates/sample/preview/index.html"
+              title="Sample"
+            />
+          </I18nProvider>,
+        );
+      });
+      expect(container.querySelector('iframe')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <DesignTemplateDetailModal
+            templates={[{
+              id: 'sample',
+              title: 'Sample Template',
+              description: 'Test',
+              scenario: 'prototype',
+              category: 'prototype',
+              entry: 'index.html',
+              tags: [],
+              previewUrl: '/motion-api/design/catalog/templates/sample/preview/index.html',
+              examplePrompt: '',
+            }]}
+            index={0}
+            onNavigate={() => {}}
+            onClose={() => {}}
+            onRemix={() => {}}
+            onUseWithAgent={() => {}}
+          />
+        </I18nProvider>,
+      );
+    });
+    expect(document.querySelectorAll('.om-design-tpl-detail-popup iframe').length).toBe(1);
+    expect(document.querySelector('.om-design-tpl-ambient')).toBeNull();
+  });
+
+  it('preserves first-row visible ScaledPreviewThumb slots without eviction and promotes queued thumbnails on release', async () => {
+    vi.stubGlobal('IntersectionObserver', NearScreenIntersectionObserver);
+    try {
+      const ids = Array.from({ length: MAX_ACTIVE_THUMBS + 2 }, (_, idx) => idx);
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <div>
+              {ids.map(idx => (
+                <ScaledPreviewThumb
+                  key={idx}
+                  active
+                  src={`/motion-api/design/catalog/templates/sample-${idx}/preview/index.html`}
+                  title={`Card ${idx}`}
+                />
+              ))}
+            </div>
+          </I18nProvider>,
+        );
+        await Promise.resolve();
+      });
+
+      const mountedTitles = [...container.querySelectorAll('iframe')].map(el => el.getAttribute('title'));
+      expect(mountedTitles.length).toBe(MAX_ACTIVE_THUMBS);
+      expect(mountedTitles[0]).toBe('Card 0');
+      expect(mountedTitles).toContain('Card 1');
+      expect(mountedTitles).not.toContain(`Card ${MAX_ACTIVE_THUMBS}`);
+
+      // Unmount Card 0: its freed slot should immediately promote the first queued waiting card.
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <div>
+              {ids.slice(1).map(idx => (
+                <ScaledPreviewThumb
+                  key={idx}
+                  active
+                  src={`/motion-api/design/catalog/templates/sample-${idx}/preview/index.html`}
+                  title={`Card ${idx}`}
+                />
+              ))}
+            </div>
+          </I18nProvider>,
+        );
+        await Promise.resolve();
+      });
+
+      const nextTitles = [...container.querySelectorAll('iframe')].map(el => el.getAttribute('title'));
+      expect(nextTitles.length).toBe(MAX_ACTIVE_THUMBS);
+      expect(nextTitles).toContain(`Card ${MAX_ACTIVE_THUMBS}`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

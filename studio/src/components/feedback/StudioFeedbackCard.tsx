@@ -233,7 +233,7 @@ export const StudioFeedbackCard = memo(function StudioFeedbackCard() {
               rel="noopener noreferrer"
               onClick={() => {
                 const req = stateRef.current.request;
-                if (req) trackStudioFeedbackInterviewClick({ reason: req.reason });
+                if (req) trackStudioFeedbackInterviewClick({ reason: req.reason, render_id: req.renderId });
                 close("sent");
               }}
               className="h-6 shrink-0 whitespace-nowrap rounded-full border border-border-strong bg-hover px-2.5 text-[11px] leading-6 text-neutral-100 transition-[background-color,border-color,transform] duration-150 ease-out hover:border-text-muted hover:bg-press active:scale-[0.97] motion-reduce:transition-none"

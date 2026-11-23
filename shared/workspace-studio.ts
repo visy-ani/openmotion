@@ -1,4 +1,5 @@
 import { deleteProjectAsset, readProjectAssetNames } from '../project-asset-names.ts';
+import { attachmentDisposition } from './http-header.ts';
 import { FONT_EXT } from './asset-names.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { lstatSync } from 'node:fs';
@@ -160,9 +161,7 @@ export async function startWorkspaceStudio(runtimeRoot: string, dataDirectory: s
             if (!attempt) return next();
             if (!attempt.fileAvailable) return c.notFound();
             if (c.req.param('action') === 'download') {
-              const fallback = attempt.filename.replace(/[^\x20-\x7e]|["\\]/g, '_');
-              const encoded = encodeURIComponent(attempt.filename).replace(/[!'()*]/g, character => '%' + character.charCodeAt(0).toString(16).toUpperCase());
-              c.header('Content-Disposition', `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`);
+              c.header('Content-Disposition', attachmentDisposition(attempt.filename));
             }
             return serveStatic({ root: attempts.directory, path: attempt.filename })(c, () => c.notFound());
           })

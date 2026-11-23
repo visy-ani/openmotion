@@ -22,6 +22,7 @@ import { McpTemplateShowcase } from './McpTemplateShowcase';
 import { HorizontalRail } from './HorizontalRail';
 import { useCommunityLink } from './CommunityLink';
 import { findTechniqueStudio } from '../../../shared/studio-catalog';
+import { findScenario, scenarioAgentPrompt } from '../../../shared/scenarios';
 import { studioSkillDefaults, skillShotPrompt, localizedSkillPrompt, motionSkills } from './skillCatalog';
 import { mcpCapabilities, mcpScenarios, searchRecoveryExample, platformExportExample, mcpBenefits, mcpReviewGuide, mcpFaq, mcpWorkflowComparison, mcpClientComparison } from './mcpCapabilities';
 import { mcpClients as clients, supportsLocalConnection } from './mcpClients';
@@ -34,7 +35,7 @@ export function McpConnectionPage({ openLibrary: openLibraryRaw, openProviders: 
   const community = useCommunityLink();
   const { info, failed, retry } = useIntegrationInfo();
   const [manualScenario, setManualScenario] = useState<{ id: string; text: string } | null>(null);
-  const [localRoute, setLocalRoute] = useState(() => readWorkspacePage(location.search, location.hash));
+  const [localRoute, setLocalRoute] = useState(() => readWorkspacePage(location.search, location.hash, location.pathname));
   const { client: clientId, setup: setupMode } = route ?? localRoute;
   const changeRoute = (patch: Partial<WorkspacePage>) => {
     if (onRouteChange) onRouteChange(patch);
@@ -89,6 +90,8 @@ export function McpConnectionPage({ openLibrary: openLibraryRaw, openProviders: 
       instruction = [prompt, t(item.prompt), skillShotPrompt(example, studioSkillDefaults(studio.id), t)].join('\n\n');
     } else if (item.id === 'review-comments') instruction = reviewCommentsPrompt({ projectId, dataDirectory: info?.dataDirectory, previewUrl: info?.previewUrl });
     else if (item.id === 'transcript') instruction = `${prompt}\n\n${transcriptExamplePrompt(info, locale)}`;
+    else if (item.id === 'scenario-black-friday') instruction = `${prompt}\n\n${scenarioAgentPrompt(findScenario('black-friday')!, { locale, integration: info })}`;
+    else if (item.id === 'scenario-workflows' || item.id === 'scenario-agent-writeback') instruction = `${prompt}\n\n${t(item.prompt)}`;
     else if (item.id === 'anime-opening') instruction = [prompt, t(item.prompt)].join('\n\n');
     else if (item.id === 'search-recovery') instruction = `${prompt}\n\n${searchRecoveryExample(t)}`;
     else if (item.id === 'platform-export') instruction = platformExportExample(locale, info ?? undefined);
@@ -138,6 +141,29 @@ export function McpConnectionPage({ openLibrary: openLibraryRaw, openProviders: 
               </div>}
             </div>
           </TabPanel>)}
+        {info?.httpTransport && (
+          <div className="om-card om-mcp-http-card">
+            <div className="om-mcp-http-meta">
+              <RemixIcon name="plug-line" size={18} />
+              <div>
+                <strong>{t('Remote MCP (Streamable HTTP)')}</strong>
+                <p className="om-muted"><code>{info.httpTransport.url}</code> · {t(info.httpTransport.authRequired ? 'Bearer token required' : 'Bearer or local access')}</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              className="om-button h-auto"
+              onClick={() => {
+                void navigator.clipboard.writeText(info.httpTransport!.url)
+                  .then(() => toast.showToast(t('Copied endpoint URL'), 'info', 'feedback'))
+                  .catch(() => toast.showToast(t('Could not copy. Select and copy the text manually.'), 'error', 'feedback'));
+              }}
+            >
+              <RemixIcon name="file-copy-line" size={14} />
+              {t('Copy endpoint URL')}
+            </Button>
+          </div>
+        )}
       </section>
 
       <McpTemplateShowcase scroller={page} enabled={previewsEnabled} canCopy={Boolean(info && supported)} openLibrary={openLibrary('mcp_templates')} onCategory={value => click('mcp_templates', 'category_select', { option: value })} onCopy={template => { if (info) void copy(`${prompt}\n\n${templatePrompt(info, client.host, template, locale)}`, { kind: 'template', template: template.id, includesSetup: true }); }} />

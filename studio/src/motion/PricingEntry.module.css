@@ -84,6 +84,35 @@
   white-space: nowrap;
 }
 
+.cornerBadge {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 15px;
+  padding: 0 6px;
+  border-radius: var(--motion-radius-full);
+  background: linear-gradient(135deg, var(--motion-black-friday-peach), var(--motion-black-friday-amber));
+  box-shadow:
+    0 2px 8px color-mix(in srgb, var(--motion-black-friday-glow) 28%, transparent),
+    0 0 0 1.5px var(--motion-panel);
+  pointer-events: none;
+}
+
+.cornerBadgeText {
+  display: block;
+  color: var(--motion-black-friday-ember);
+  font-family: var(--motion-font-sans);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 @container (max-width: 640px) {
   .label {
     display: none;
@@ -92,6 +121,10 @@
     padding: 0 var(--motion-space-8) 1px;
   }
   .badge {
+    padding: 0 5px;
+  }
+  .cornerBadge {
+    right: -2px;
     padding: 0 5px;
   }
 }

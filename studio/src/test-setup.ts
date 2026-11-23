@@ -1,3 +1,5 @@
+import { preloadAllLocales } from "./i18n/messages";
+
 if (typeof globalThis.CSS === "undefined") {
   (globalThis as Record<string, unknown>).CSS = {};
 }
@@ -12,3 +14,7 @@ if (typeof CSS.escape !== "function") {
 if (typeof globalThis.confirm !== "function") {
   (globalThis as Record<string, unknown>).confirm = () => false;
 }
+
+// Preload all lazy per-locale dictionaries once per Vitest worker so existing
+// synchronous UI and i18n suites keep working without mocking dynamic imports.
+await preloadAllLocales();

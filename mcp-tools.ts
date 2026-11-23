@@ -1,3 +1,5 @@
+import { gameTools } from './shared/game-tools.ts';
+import { dispatchGameTool } from './game-projects.ts';
 import { templateCatalogFor } from './prism-templates.ts';
 import { loadLibrarySkills, skillUsage } from './shared/library-skill-catalog.ts';
 import { legacyToolName, publicToolName } from './shared/public-names.mjs';
@@ -28,6 +30,7 @@ const mediaKind = { type: 'string', enum: ['image', 'video', 'audio'] };
 const providerKind = { type: 'string', enum: ['codex', 'atlascloud', 'fal'] };
 const modelParameters = { type: 'object', description: 'Provider-native input fields, e.g. duration, resolution, image_url or voice. No model, prompt, credentials or webhook_url. Check the chosen model API for required fields.', additionalProperties: true };
 export const tools = [
+  ...gameTools,
   { name: 'openmotion_get_session', title: 'OpenMotion · Get Session', description: 'Read the current OpenMotion conversation, mode, skill and owned artifacts. Sessions are independent of OpenMotion projects. Select an artifact from this session before editing it with the OpenMotion tools.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' } }, additionalProperties: false }, annotations: reads },
   { name: 'openmotion_append_message', title: 'OpenMotion · Append Message', description: 'Append a real user request or Agent reply to the shared conversation. Supply a stable message UUID for safe retries. This records content only; it does not execute a model or report artifact generation as completed.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' }, id: { type: 'string' }, role: { enum: ['user', 'assistant'], default: 'assistant' }, content: { type: 'string', minLength: 1, maxLength: 8000 } }, required: ['sessionId', 'id', 'content'], additionalProperties: false }, annotations: { ...writes, idempotentHint: true } },
   { name: 'openmotion_create_session', title: 'OpenMotion · Create Session', description: 'Create a host-independent Agent conversation first, then optionally generate its mode/template artifact. Uses the same session API as the OpenMotion Agent UI. Set createArtifact=false to converse before producing an artifact. Returns a default embedded previewUrl and an explicit full-workspace sessionUrl. On generation failure the conversation is preserved for retry.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, mode: { enum: creationModes.map(mode => mode.id) }, title: { type: 'string' }, instruction: { type: 'string', maxLength: 8000 }, templateId: { type: 'string' }, createArtifact: { type: 'boolean', default: true }, embedded: { type: 'boolean', default: true, description: 'Default: Viewer only for host browsers. Set false for the full conversation workspace.' } }, additionalProperties: false }, annotations: writes },
@@ -93,6 +96,7 @@ async function designRequest(origin: string, path: string, data: object, store: 
 export async function callTool(name: string, args: Record<string, unknown> = {}, store = new WorkspaceStore(), tracking?: OmTracking) {
   name = legacyToolName(name);
   if (!tools.some(tool => tool.name === publicToolName(name))) throw new Error('Unknown tool: ' + name);
+  if (name.startsWith('motion_game_')) return dispatchGameTool(name, args, (store.workspaceStore ?? store).directory);
   if (args.projectId !== undefined) {
     if (typeof args.projectId !== 'string') throw new Error('工程编号无效');
     store = store.forProject(args.projectId);

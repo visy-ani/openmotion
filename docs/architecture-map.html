@@ -1,0 +1,1789 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenMotion · 跨端 MCP 架构与系统边界全景图</title>
+  <style>
+    :root {
+      --bg: #f4f6fa;
+      --bg-grid: rgba(15, 23, 42, 0.045);
+      --surface: #ffffff;
+      --surface-soft: #f8fafc;
+      --surface-alt: #eef2f8;
+      --border: #d7e0ec;
+      --border-strong: #9fb0c8;
+      --text: #0f172a;
+      --muted: #475569;
+      --accent: #0f766e;
+      --accent-soft: rgba(15, 118, 110, 0.1);
+      --accent-ink: #ffffff;
+      --blue: #2563eb;
+      --blue-soft: rgba(37, 99, 235, 0.09);
+      --purple: #6d28d9;
+      --purple-soft: rgba(109, 40, 217, 0.09);
+      --amber: #b45309;
+      --amber-soft: rgba(180, 83, 9, 0.1);
+      --red: #dc2626;
+      --red-soft: rgba(220, 38, 38, 0.08);
+      --red-pill-bg: #fef2f2;
+      --edge-muted: #cbd5e1;
+      --shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+    }
+
+    html[data-theme="dark"] {
+      --bg: #0a0e17;
+      --bg-grid: rgba(148, 163, 184, 0.055);
+      --surface: #111827;
+      --surface-soft: #151e2e;
+      --surface-alt: #1b2538;
+      --border: #28354d;
+      --border-strong: #465878;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #2dd4bf;
+      --accent-soft: rgba(45, 212, 191, 0.12);
+      --accent-ink: #042f2e;
+      --blue: #60a5fa;
+      --blue-soft: rgba(96, 165, 250, 0.12);
+      --purple: #a78bfa;
+      --purple-soft: rgba(167, 139, 250, 0.12);
+      --amber: #fbbf24;
+      --amber-soft: rgba(251, 191, 36, 0.12);
+      --red: #f87171;
+      --red-soft: rgba(248, 113, 113, 0.12);
+      --red-pill-bg: #261217;
+      --edge-muted: #334155;
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background-color: var(--bg);
+      background-image: radial-gradient(var(--bg-grid) 1px, transparent 1px);
+      background-size: 20px 20px;
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app {
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 18px 20px 56px;
+    }
+
+    /* Header & Toolbar */
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .brand-title {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .eyebrow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .topbar h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .topbar p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .toolbar-right {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn:hover { border-color: var(--border-strong); }
+    .btn:active { transform: translateY(1px); }
+
+    .btn[aria-pressed="true"],
+    .btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    .btn-redline[aria-pressed="true"] {
+      background: var(--red-soft);
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .flow-bar {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .flow-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-right: 4px;
+    }
+
+    /* Main Workspace Grid */
+    .workspace {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 390px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 1120px) {
+      .workspace { grid-template-columns: 1fr; }
+    }
+
+    .canvas-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      overflow-x: auto;
+    }
+
+    .canvas-stage {
+      position: relative;
+      min-width: 780px;
+    }
+
+    #diagram-edges {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 3;
+      overflow: visible;
+    }
+
+    .edge-path {
+      fill: none;
+      stroke: var(--edge-muted);
+      stroke-width: 1.6;
+      opacity: 0.72;
+      transition: stroke 0.18s ease, stroke-width 0.18s ease, opacity 0.18s ease;
+    }
+
+    .edge-path.dashed {
+      stroke-dasharray: 5 4;
+    }
+
+    .edge-path.active {
+      stroke: var(--accent);
+      stroke-width: 2.5;
+      opacity: 1;
+    }
+
+    .edge-path.boundary-cross {
+      stroke: var(--red);
+      stroke-width: 2.2;
+      opacity: 0.95;
+    }
+
+    .edge-path.dimmed {
+      opacity: 0.14;
+    }
+
+    .layers-stack {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* Layer Band */
+    .layer-band {
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px 14px;
+      transition: border-color 0.15s ease, opacity 0.15s ease;
+    }
+
+    .layer-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .layer-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .layer-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .layer-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .node-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+    /* Node Card */
+    .node {
+      position: relative;
+      text-align: left;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 11px;
+      padding: 10px 11px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      color: var(--text);
+      font-family: var(--sans);
+      transition: border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.12s ease, background 0.16s ease;
+    }
+
+    .node:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .node.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+      background: var(--surface);
+    }
+
+    .node.flow-hit {
+      border-color: var(--accent);
+      background: var(--surface);
+      box-shadow: 0 2px 12px var(--accent-soft);
+    }
+
+    .node.dimmed {
+      opacity: 0.3;
+    }
+
+    .node-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .node-kind {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .node[data-tone="teal"] .node-kind { background: var(--accent-soft); color: var(--accent); }
+    .node[data-tone="purple"] .node-kind { background: var(--purple-soft); color: var(--purple); }
+    .node[data-tone="amber"] .node-kind { background: var(--amber-soft); color: var(--amber); }
+
+    .node-step {
+      display: none;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    .node.flow-hit .node-step[data-visible="true"] {
+      display: inline-block;
+    }
+
+    .node-title {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .node-summary {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.38;
+    }
+
+    .node-file {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--surface-alt);
+      padding: 2px 6px;
+      border-radius: 5px;
+      align-self: flex-start;
+      margin-top: auto;
+      word-break: break-all;
+    }
+
+    /* Boundary Divider Strip between Layers */
+    .boundary-strip {
+      position: relative;
+      margin: 14px 0;
+      min-height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .boundary-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      z-index: 1;
+      border-top: 1.5px dashed var(--border-strong);
+      transition: border-color 0.16s ease, border-width 0.16s ease;
+    }
+
+    .boundary-pill {
+      position: relative;
+      z-index: 5;
+      appearance: none;
+      font-family: var(--sans);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1.5px solid var(--border-strong);
+      color: var(--muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .boundary-pill:hover,
+    .boundary-pill.selected {
+      border-color: var(--red);
+      color: var(--red);
+      background: var(--red-pill-bg);
+      box-shadow: 0 0 0 3px var(--red-soft);
+    }
+
+    .redlines-on .boundary-line {
+      border-top: 2px dashed var(--red);
+    }
+
+    .redlines-on .boundary-pill {
+      border-color: var(--red);
+      color: var(--red);
+      background: var(--red-pill-bg);
+    }
+
+    /* Sticky Right Inspector */
+    .inspector {
+      position: sticky;
+      top: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+    }
+
+    @media (max-width: 1120px) {
+      .inspector { position: static; max-height: none; }
+    }
+
+    .insp-head {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .insp-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .badge.boundary {
+      background: var(--red-soft);
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .badge.layer {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .insp-head h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.3;
+    }
+
+    .insp-head p {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .insp-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .insp-section h3 {
+      margin: 0;
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+
+    .rule-box {
+      padding: 9px 11px;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+    }
+
+    .rule-box.allow { border-left: 3px solid var(--accent); }
+    .rule-box.deny { border-left: 3px solid var(--red); }
+
+    .rule-list {
+      margin: 0;
+      padding-left: 16px;
+      display: grid;
+      gap: 5px;
+      font-size: 12px;
+    }
+
+    .file-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .file-chip {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 7px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .sequence-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 7px;
+    }
+
+    .sequence-item {
+      display: grid;
+      grid-template-columns: 22px 1fr;
+      gap: 8px;
+      align-items: start;
+      padding: 8px 10px;
+      border-radius: 9px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .seq-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+    }
+
+    /* Boundary Matrix Table */
+    .matrix-card {
+      margin-top: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .matrix-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .matrix-head h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .matrix-head span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      min-width: 820px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      background: var(--surface-soft);
+    }
+
+    tbody tr {
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    tbody tr:hover {
+      background: var(--surface-soft);
+    }
+
+    tbody tr.active-row {
+      background: var(--accent-soft);
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand-title">
+        <span class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>OpenMotion Architecture Blueprint</span>
+        <h1>OpenMotion 跨端 MCP 架构与系统边界全景图</h1>
+        <p>单核 5 层架构 · Web 与 Mac/Win/Linux 桌面端共用 React SPA · Streamable HTTP <code>/mcp</code> 与本地 Stdio 统一契约</p>
+      </div>
+      <div class="toolbar-right">
+        <button id="toggle-redlines" class="btn btn-redline" type="button" aria-pressed="true">边界红线 · 开启</button>
+        <button id="toggle-theme" class="btn" type="button" aria-pressed="false">切换深色</button>
+      </div>
+    </header>
+
+    <div class="flow-bar" role="toolbar" aria-label="调用链路视角切换">
+      <span class="flow-label">调用链路：</span>
+      <button class="btn active" data-flow="all" type="button">全景视图</button>
+      <button class="btn" data-flow="internal-agent" type="button">1 · 内部 Web/桌面 → Agent → MCP</button>
+      <button class="btn" data-flow="cloud-bridge" type="button">2 · 云端 Web → 本地 Agent（NAT 穿透）</button>
+      <button class="btn" data-flow="external-mcp" type="button">3 · 外部 Agent → Stdio / HTTP /mcp</button>
+      <button class="btn" data-flow="batch-trigger" type="button">4 · 批量内容优化 &amp; Trigger</button>
+      <button class="btn" data-flow="cloud-deploy" type="button">5 · Open Design 云端部署 &amp; 分享</button>
+    </div>
+
+    <div class="workspace">
+      <section class="canvas-card" aria-label="系统架构分层画布">
+        <div id="canvas-stage" class="canvas-stage redlines-on">
+          <svg id="diagram-edges" aria-hidden="true"></svg>
+
+          <div class="layers-stack">
+            <!-- Layer 1 -->
+            <div class="layer-band" data-layer-band="1">
+              <div class="layer-head">
+                <div class="layer-title">
+                  <span class="layer-tag">LAYER 1</span>
+                  <span>交互入口层 · 统一前端 SPA &amp; 3 端桌面外壳</span>
+                </div>
+                <span class="layer-sub">Web 与 Electron 共享 <code>studio/</code> React 页面，只通过 <code>PlatformHost</code> 适配宿主差异</span>
+              </div>
+              <div class="node-grid cols-4">
+                <button class="node" data-node="web-browser" data-tone="blue" type="button">
+                  <div class="node-top"><span class="node-kind">WEB SPA</span><span class="node-step"></span></div>
+                  <div class="node-title">Web 浏览器端</div>
+                  <div class="node-summary">本地 / Docker / 云端 HTTPS 运行，支持 <code>openmotion_browser</code> 与浏览器下载兜底</div>
+                  <span class="node-file">studio/src/main.tsx</span>
+                </button>
+                <button class="node" data-node="desktop-mac" data-tone="blue" type="button">
+                  <div class="node-top"><span class="node-kind">macOS</span><span class="node-step"></span></div>
+                  <div class="node-title">macOS 桌面端</div>
+                  <div class="node-summary"><code>hiddenInset</code> 左侧红绿灯 78px 安全区（全屏自动归零），打包 <code>.dmg</code> / <code>.zip</code></div>
+                  <span class="node-file">desktop/src/platform.ts</span>
+                </button>
+                <button class="node" data-node="desktop-win-lin" data-tone="blue" type="button">
+                  <div class="node-top"><span class="node-kind">WIN / LINUX</span><span class="node-step"></span></div>
+                  <div class="node-title">Windows / Linux 桌面</div>
+                  <div class="node-summary">Win <code>titleBarOverlay</code> 138px / Linux 自定义控制栏 132px；NSIS / AppImage / deb</div>
+                  <span class="node-file">desktop/package.json</span>
+                </button>
+                <button class="node" data-node="platform-host" data-tone="teal" type="button">
+                  <div class="node-top"><span class="node-kind">BRIDGE</span><span class="node-step"></span></div>
+                  <div class="node-title">PlatformHost 能力桥</div>
+                  <div class="node-summary">无边框启动页 Splash、日志导出、错误上报、自动更新 Check Update、加群菜单</div>
+                  <span class="node-file">shared/platform-host.ts</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Boundary A -->
+            <div class="boundary-strip">
+              <div class="boundary-line"></div>
+              <button class="boundary-pill" data-boundary="B-A" type="button">
+                边界 A · 进程隔离与宿主能力边界（<code>contextIsolation: true</code> / 禁止渲染进程触碰密钥或本地 FS）
+              </button>
+            </div>
+
+            <!-- Layer 2 -->
+            <div class="layer-band" data-layer-band="2">
+              <div class="layer-head">
+                <div class="layer-title">
+                  <span class="layer-tag">LAYER 2</span>
+                  <span>控制平面网关 · HTTP API / SSE / Origin 守卫 / Sidecar 托管</span>
+                </div>
+                <span class="layer-sub">保留 <code>/api</code> <code>/motion-api</code> <code>/design-api</code> <code>/mcp</code> 前缀，不直接暴露内部进程</span>
+              </div>
+              <div class="node-grid cols-3">
+                <button class="node" data-node="http-gateway" data-tone="teal" type="button">
+                  <div class="node-top"><span class="node-kind">GATEWAY</span><span class="node-step"></span></div>
+                  <div class="node-title">控制平面 HTTP/SSE 网关</div>
+                  <div class="node-summary">统一承接 Studio <code>/motion-api/*</code> <code>/design-api/*</code> <code>/mcp</code> 与路由 Origin/Host 策略校验</div>
+                  <span class="node-file">server.ts</span>
+                </button>
+                <button class="node" data-node="token-auth" data-tone="amber" type="button">
+                  <div class="node-top"><span class="node-kind">AUTH</span><span class="node-step"></span></div>
+                  <div class="node-title">作用域 Token 与签名鉴权</div>
+                  <div class="node-summary"><code>om_mcp_*</code>（read/write/admin SHA-256）、<code>om_brg_*</code> 桥接令牌、<code>om_trg_*</code> HMAC 验签</div>
+                  <span class="node-file">gateway/mcp-http.ts</span>
+                </button>
+                <button class="node" data-node="sidecar-ctl" data-tone="blue" type="button">
+                  <div class="node-top"><span class="node-kind">SIDECAR</span><span class="node-step"></span></div>
+                  <div class="node-title">Desktop Sidecar 守护进程</div>
+                  <div class="node-summary">桌面端仅绑定 <code>127.0.0.1</code> 随机空闲端口，隔离 <code>&lt;userData&gt;/workspace</code>，退出/更新前安全回收</div>
+                  <span class="node-file">desktop/src/sidecar.ts</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Boundary B -->
+            <div class="boundary-strip">
+              <div class="boundary-line"></div>
+              <button class="boundary-pill" data-boundary="B-B" type="button">
+                边界 B · 网络与鉴权边界（<code>read</code> 令牌禁止写操作 <code>-32003</code> / 云端强制 Bearer / Loopback 仅限本机）
+              </button>
+            </div>
+
+            <!-- Layer 3 -->
+            <div class="layer-band" data-layer-band="3">
+              <div class="layer-head">
+                <div class="layer-title">
+                  <span class="layer-tag">LAYER 3</span>
+                  <span>统一 MCP Hub 与自动化总线 · Stdio / Streamable HTTP / Triggers</span>
+                </div>
+                <span class="layer-sub">外部与内部 Agent 通过完全一致的 34 个 <code>openmotion_*</code> 公开工具契约接入</span>
+              </div>
+              <div class="node-grid cols-4">
+                <button class="node" data-node="mcp-stdio" data-tone="teal" type="button">
+                  <div class="node-top"><span class="node-kind">STDIO</span><span class="node-step"></span></div>
+                  <div class="node-title">本地 Stdio MCP</div>
+                  <div class="node-summary">供本机 Codex / Claude Code / Cursor / DSH 直接拉起进程通信</div>
+                  <span class="node-file">mcp.ts · .mcp.json</span>
+                </button>
+                <button class="node" data-node="mcp-http" data-tone="teal" type="button">
+                  <div class="node-top"><span class="node-kind">HTTP /mcp</span><span class="node-step"></span></div>
+                  <div class="node-title">Streamable HTTP MCP</div>
+                  <div class="node-summary"><code>POST/GET/DELETE /mcp</code>，支持 <code>Mcp-Session-Id</code> 与 4 个协议版本</div>
+                  <span class="node-file">gateway/mcp-http.ts</span>
+                </button>
+                <button class="node" data-node="mcp-registry" data-tone="purple" type="button">
+                  <div class="node-top"><span class="node-kind">CONTRACT</span><span class="node-step"></span></div>
+                  <div class="node-title">34 工具公开契约守卫</div>
+                  <div class="node-summary">强制 <code>mcpRegistry('phase1')</code> 校验，拒绝未注册工具与越权写入</div>
+                  <span class="node-file">shared/mcp-registry.ts</span>
+                </button>
+                <button class="node" data-node="triggers" data-tone="amber" type="button">
+                  <div class="node-top"><span class="node-kind">TRIGGER</span><span class="node-step"></span></div>
+                  <div class="node-title">自动化触发引擎</div>
+                  <div class="node-summary">支持入站 Webhook（HMAC-SHA256）、定时间隔（&gt;=60s）及手动触发 MCP/批量任务</div>
+                  <span class="node-file">gateway/triggers.ts</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Boundary C -->
+            <div class="boundary-strip">
+              <div class="boundary-line"></div>
+              <button class="boundary-pill" data-boundary="B-C" type="button">
+                边界 C · 公开契约边界（仅暴露 34 个公开工具；UI 与外部 Agent 共用同一契约与输入校验）
+              </button>
+            </div>
+
+            <!-- Layer 4 -->
+            <div class="layer-band" data-layer-band="4">
+              <div class="layer-head">
+                <div class="layer-title">
+                  <span class="layer-tag">LAYER 4</span>
+                  <span>Agent 编排与计算平面 · 本地直连 / 出站 NAT 桥接 / 云端 Agent / 外部宿主</span>
+                </div>
+                <span class="layer-sub">控制面不入站穿透用户电脑，只允许用户本地 Bridge 主动出站长连接拉取任务</span>
+              </div>
+              <div class="node-grid cols-5">
+                <button class="node" data-node="super-agent" data-tone="purple" type="button">
+                  <div class="node-top"><span class="node-kind">ORCH</span><span class="node-step"></span></div>
+                  <div class="node-title">Super Agent 编排器</div>
+                  <div class="node-summary">分发对话回合，自动切换本地直连、桥接代理或远端 Agent 运行时</div>
+                  <span class="node-file">gateway/super-agent.ts</span>
+                </button>
+                <button class="node" data-node="rt-local" data-tone="blue" type="button">
+                  <div class="node-top"><span class="node-kind">LOCAL</span><span class="node-step"></span></div>
+                  <div class="node-title"><code>local-direct</code> 本地直连</div>
+                  <div class="node-summary">启动预热 <code>warmup()</code> 识别本机 Agent CLI 并自动注入本地 MCP</div>
+                  <span class="node-file">gateway/local-agents.ts</span>
+                </button>
+                <button class="node" data-node="rt-bridge" data-tone="amber" type="button">
+                  <div class="node-top"><span class="node-kind">BRIDGE</span><span class="node-step"></span></div>
+                  <div class="node-title"><code>local-bridge</code> 出站桥</div>
+                  <div class="node-summary"><code>install.sh</code> / <code>install.ps1</code> 仅出站 SSE 接入云端，驱动本机 Agent 无公网 IP</div>
+                  <span class="node-file">gateway/agent-bridge.ts</span>
+                </button>
+                <button class="node" data-node="rt-remote" data-tone="blue" type="button">
+                  <div class="node-top"><span class="node-kind">CLOUD</span><span class="node-step"></span></div>
+                  <div class="node-title"><code>remote-service</code> 云端</div>
+                  <div class="node-summary">对接遵循 <code>openmotion-agent-v1</code> HTTP+SSE 协议的自建/云端 Agent</div>
+                  <span class="node-file">gateway/agent-service-adapter.ts</span>
+                </button>
+                <button class="node" data-node="ext-agents" data-tone="purple" type="button">
+                  <div class="node-top"><span class="node-kind">EXTERNAL</span><span class="node-step"></span></div>
+                  <div class="node-title">外部 Agent 宿主</div>
+                  <div class="node-summary">Codex / Claude Code / Cursor / 外部云 Agent / CI Webhook 消费者</div>
+                  <span class="node-file">McpConnectionPage</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Boundary D -->
+            <div class="boundary-strip">
+              <div class="boundary-line"></div>
+              <button class="boundary-pill" data-boundary="B-D" type="button">
+                边界 D · 控制面 vs 计算面 / 域服务单一事实源边界（所有状态变更回归同一 Domain Service 与版本锁）
+              </button>
+            </div>
+
+            <!-- Layer 5 -->
+            <div class="layer-band" data-layer-band="5">
+              <div class="layer-head">
+                <div class="layer-title">
+                  <span class="layer-tag">LAYER 5</span>
+                  <span>共享域服务核、批量内容优化、工作区持久化与外部云边界</span>
+                </div>
+                <span class="layer-sub">单一能力实现被 UI、MCP 与 Trigger 共用；云端部署与用户密钥严格隔离开源仓库</span>
+              </div>
+              <div class="node-grid cols-4">
+                <button class="node" data-node="domain-core" data-tone="teal" type="button">
+                  <div class="node-top"><span class="node-kind">DOMAIN</span><span class="node-step"></span></div>
+                  <div class="node-title">共享域服务核</div>
+                  <div class="node-summary">Motion/Design/Game 工程、Scenario 工作流、资产版本、BrandKit、多媒体渲染</div>
+                  <span class="node-file">phase1.ts · design-projects.ts</span>
+                </button>
+                <button class="node" data-node="batch-engine" data-tone="purple" type="button">
+                  <div class="node-top"><span class="node-kind">BATCH</span><span class="node-step"></span></div>
+                  <div class="node-title">批量内容优化引擎</div>
+                  <div class="node-summary"><code>mcp-pipeline</code> / <code>agent-optimize</code> / <code>scenario-matrix</code>，支持 50 并发池化生产与 ZIP 打包</div>
+                  <span class="node-file">gateway/content-batch.ts</span>
+                </button>
+                <button class="node" data-node="local-store" data-tone="blue" type="button">
+                  <div class="node-top"><span class="node-kind">STORAGE</span><span class="node-step"></span></div>
+                  <div class="node-title">工作区状态与版本锁</div>
+                  <div class="node-summary"><code>&lt;dataDirectory&gt;</code> 独立存放工程、资产版本与日志，<code>withProcessLock</code> 防止并发覆盖</div>
+                  <span class="node-file">workspace.ts · process-lock.ts</span>
+                </button>
+                <button class="node" data-node="cloud-deploy" data-tone="amber" type="button">
+                  <div class="node-top"><span class="node-kind">EGRESS</span><span class="node-step"></span></div>
+                  <div class="node-title">Open Design 云端网页发布 &amp; 出口</div>
+                  <div class="node-summary">复用 OpenDesign 登录态推送 Design / Game / Motion / 任意 HTML 站点并生成 HTTPS 分享页；BYOK 与桌面更新</div>
+                  <span class="node-file">gateway/web-publish.ts</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sticky Inspector -->
+      <aside class="inspector" aria-label="组件与边界详情检查器">
+        <div class="insp-head">
+          <div class="insp-badges" id="insp-badges"></div>
+          <h2 id="insp-title">点击任意模块或边界红线</h2>
+          <p id="insp-subtitle">可切换上方 5 条调用链路高亮跨端数据流，或在画布中查看每一层的允许 / 禁止边界与真实源码映射。</p>
+        </div>
+
+        <div id="insp-sequence-wrap" class="insp-section" style="display:none;">
+          <h3>当前链路调用时序</h3>
+          <ol id="insp-sequence" class="sequence-list"></ol>
+        </div>
+
+        <div class="insp-section">
+          <h3>职责定位</h3>
+          <div id="insp-role" class="rule-box"></div>
+        </div>
+
+        <div class="insp-section">
+          <h3>明确允许（跨越此边界可做什么）</h3>
+          <ul id="insp-allow" class="rule-list rule-box allow"></ul>
+        </div>
+
+        <div class="insp-section">
+          <h3>硬性红线（禁止越界的行为）</h3>
+          <ul id="insp-deny" class="rule-list rule-box deny"></ul>
+        </div>
+
+        <div class="insp-section">
+          <h3>通信协议与鉴权</h3>
+          <div id="insp-proto" class="rule-box"></div>
+        </div>
+
+        <div class="insp-section">
+          <h3>核心源码与规范引用</h3>
+          <div id="insp-files" class="file-chips"></div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- System Boundary Matrix -->
+    <section class="matrix-card" aria-label="系统边界总览矩阵">
+      <div class="matrix-head">
+        <h2>系统核心边界对照矩阵（点击任意行可定位并在右侧检查）</h2>
+        <span>覆盖进程隔离 · 鉴权与作用域 · MCP 公开契约 · 控制面与计算面 · 本地持久化与云端出站</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>边界编号</th>
+              <th>边界两侧（调用方 ↔ 提供方）</th>
+              <th>跨越机制 / 协议</th>
+              <th>强约束红线（禁止越界）</th>
+              <th>核心实现模块</th>
+            </tr>
+          </thead>
+          <tbody id="matrix-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const BOUNDARIES = {
+      'B-A': {
+        id: 'B-A',
+        kind: '边界 A · 进程与宿主 UI 边界',
+        layer: 'Layer 1 ↔ Layer 2',
+        title: '前端 SPA（Web / Electron 渲染进程）↔ Native OS Shell / 本地 Node 控制平面',
+        subtitle: '同一套 `studio/` React 前端无差别运行于浏览器或 macOS/Win/Linux 桌面窗口中，操作系统差异由 Electron Main + Preload 白名单彻底隔离。',
+        role: '保证 Web 与 3 端桌面端 100% 复用 UI 逻辑、设计体系与路由代码，同时适配 macOS 左上角红绿灯 78px 安全区、Windows WCO 138px、Linux 自定义 132px 控制按钮以及桌面启动动画/更新/日志。',
+        allow: [
+          '通过 `window.openmotionDesktop`（`PlatformHost` 接口）触发窗口控制、主题同步、导出诊断包、检查更新。',
+          '渲染进程仅通过 HTTP `/motion-api/*`、`/design-api/*`、`/mcp` 与同源或本机 loopback 控制平面通信。',
+          '桌面主进程控制无边框 Splash 启动窗，并在 `ready-to-show` / sidecar 健康就绪后无缝切换主窗口。'
+        ],
+        deny: [
+          '严禁开启 `nodeIntegration: true` 或在 `studio/` 业务代码中直接引入 Electron / Node 原生模块。',
+          '严禁前端伪造 OS 红绿灯或绕过 `PlatformHost` 分支硬编码系统路径。',
+          '桌面包 `desktop/` 不与根目录 `package.json` 互相污染，确保云端 Docker/Headless 部署零 Electron 依赖。'
+        ],
+        proto: 'Electron `contextBridge.exposeInMainWorld`（受限 IPC 白名单通道）+ HTTP/SSE；全屏状态通过 `fullscreenchange` 自动塌缩安全留白。',
+        files: ['shared/platform-host.ts', 'studio/src/utils/platformHost.ts', 'desktop/src/preload.ts', 'desktop/src/platform.ts', 'desktop/src/main.ts', 'desktop/src/splash.ts']
+      },
+      'B-B': {
+        id: 'B-B',
+        kind: '边界 B · 网络暴露面与鉴权边界',
+        layer: 'Layer 2 · 网关与守护进程',
+        title: '外部/浏览器网络请求 ↔ 本地/云端网关（`server.ts` + Sidecar）',
+        subtitle: '将端口绑定、Origin 策略、作用域 Bearer Token 与 Sidecar 生命周期锁死在入口网关层。',
+        role: '无论部署在本机桌面（Sidecar 随机 loopback 端口）还是云端 HTTPS Docker 集群（`MOTION_DEPLOYMENT_MODE=cloud`），统一在此执行身份核验与前缀路由保护。',
+        allow: [
+          '桌面 Sidecar 仅绑定 `127.0.0.1`，通过 `/api/health` 等待就绪并在退出或更新安装前优雅关闭。',
+          '`/mcp` 接受 SHA-256 哈希比对的 `om_mcp_*` 作用域令牌（`read` / `write` / `admin`）。',
+          '云端模式严格校验公网域名 Origin/Host 白名单及反向代理 `X-Forwarded-Proto`。'
+        ],
+        deny: [
+          '云端模式下严禁匿名放行 `/mcp` 或跳过 Bearer Token 检查（本地未开认证时仅允许 loopback 访问）。',
+          '持有 `read` 作用域令牌的调用方严禁执行写操作（网关直接返回 JSON-RPC `-32003 MCP_SCOPE_FORBIDDEN`）。',
+          '严禁将明文 `om_mcp_*` / `om_brg_*` / `om_trg_*` Token 或用户 API Key 落盘或写入诊断包。'
+        ],
+        proto: 'HTTPS / HTTP Loopback (`127.0.0.1`)、Bearer Token（SHA-256 存储哈希）、Trigger HMAC `X-OpenMotion-Signature: sha256=...`。',
+        files: ['server.ts', 'desktop/src/sidecar.ts', 'gateway/mcp-http.ts', 'gateway/triggers.ts', 'scripts/diagnostics.mjs']
+      },
+      'B-C': {
+        id: 'B-C',
+        kind: '边界 C · 公开 MCP 工具契约边界',
+        layer: 'Layer 3 · 统一 MCP Hub',
+        title: '内外部 AI Agent / 自动化触发器 ↔ 34 个标准化公开工具契约',
+        subtitle: '本地 `stdio` 通道与远程 `Streamable HTTP /mcp` 完全收敛于 `mcpRegistry("phase1")`，不允许私房隐藏接口旁路。',
+        role: '确保不管是 Studio 内嵌的 Super Agent、本机 Claude Code / Codex，还是云端自动化 Webhook 与远程 MCP 客户端，看到的工具名称、Schema、输入校验和执行语义完全一致。',
+        allow: [
+          '通过 `mcp.ts`（stdio）或 `gateway/mcp-http.ts`（`POST/GET/DELETE /mcp`，支持 `2024-11-05` 至 `2025-11-25`）发现并调用 34 个 `openmotion_*` 工具。',
+          '通过 `openmotion_assets_use` 的 `action="batch"` / `action="trigger"` 组合批量内容优化与自动化触发器。',
+          '通过 `openmotion_design_project` 的 `deploy` / `deploy_status` / `unpublish` 执行在线网页发布。'
+        ],
+        deny: [
+          '严禁向外部注册或暴露未纳入 `phase1` 契约清单的内部兼容名或实验接口。',
+          '严禁跳过 `validateInput()` 前置参数检查或把工具业务校验散落到单个 UI 页面里实现。'
+        ],
+        proto: 'MCP JSON-RPC 2.0（Stdio 换行帧 / Streamable HTTP `Mcp-Session-Id` + 可选 SSE `text/event-stream` 流）。',
+        files: ['mcp.ts', 'gateway/mcp-http.ts', 'shared/mcp-registry.ts', 'shared/mcp-profiles.json', 'gateway/triggers.ts']
+      },
+      'B-D': {
+        id: 'B-D',
+        kind: '边界 D · 控制面 vs 计算面 / NAT 穿透边界',
+        layer: 'Layer 4 · Agent 运行时集群',
+        title: '云端/桌面控制面（Super Agent）↔ 用户本机 CLI / 远程云端 Agent 计算节点',
+        subtitle: '参考 Multica 与 LobeHub 分层思路，将「会话与工具权威」留在控制面，将「AI CLI 推理计算」按运行时安全下放。',
+        role: '用户在网页打开云端 Studio 时，即使本机处于 NAT 内网防火墙之后，也能运行一条 `install.sh` / `install.ps1` 命令让本机 Claude/Codex 成为受控算力节点，并反向调用 MCP 返回产物。',
+        allow: [
+          '`local-direct` 在本机/桌面端启动即 `warmup()` 扫描已安装的本地 Agent CLI 并注入本地 MCP 配置。',
+          '`local-bridge` 由用户本机脚本发起**仅出站** SSE 长连接 `/motion-api/agent-runtimes/bridge/stream`，在用户沙箱内执行 CLI 后经 `/bridge/tool-call` 回写。',
+          '`remote-service` 通过标准化 `openmotion-agent-v1` 协议对接外部云端 Agent 服务。'
+        ],
+        deny: [
+          '云端控制面严禁反向扫描、探测或入站主动直连用户电脑的私有端口（必须走用户主动发起的出站 Bridge）。',
+          '外部计算节点不得直接读写服务端的底层磁盘数据库，一切工程变更必须经由控制面审计的工具回写接口完成。'
+        ],
+        proto: 'Local Child Process + MCP（直连）/ Outbound-only HTTPS SSE + Tool-call POST（Bridge）/ `openmotion-agent-v1` HTTP+SSE（云端 Agent）。',
+        files: ['gateway/super-agent.ts', 'gateway/agent-runtimes.ts', 'gateway/local-agents.ts', 'gateway/agent-bridge.ts', 'gateway/agent-bridge-script.ts', 'gateway/agent-service-adapter.ts']
+      },
+      'B-E': {
+        id: 'B-E',
+        kind: '边界 E · 单一域服务权威、工作区隔离与外部云出口',
+        layer: 'Layer 5 · 共享域核与外站出口',
+        title: '核心 Domain Service & `<dataDirectory>` 持久化 ↔ 外部云（Open Design / BYOK 模型商 / GitHub Releases）',
+        subtitle: '同一能力只写一套核心代码；所有敏感凭证和用户项目数据保存在 checkout 外部；所有跨公网上传与下载均经过严格过滤与校验。',
+        role: '保障 Studio、MCP、Batch Engine 与 Trigger 对项目、版本修订（`revision`）、资产引用保持单一事实源，并将网页部署（`vela-cli`）、多媒体推理、桌面更新收口为清晰的白名单出口。',
+        allow: [
+          'UI 控件、MCP 工具与批量引擎共同调用 `phase1.ts`、`design-projects.ts`、`gateway/content-batch.ts`、`gateway/design-deploy.ts`。',
+          '`DesignDeployService` 复用已登录的 OpenDesign 凭证，安全过滤静态产物后推向 `amr-api.open-design.ai`，返回受验的 `https://open-design.app/artifact/...` 链接。',
+          '通过 `withProcessLock` 与 `atomicJson` 保护多人/多 Agent 并发写入和版本号递增。'
+        ],
+        deny: [
+          '严禁将 `.env*`、`.git`、`node_modules`、隐藏文件或符号链接打包上传到云端网页发布目录。',
+          '严禁把用户凭证、项目资产、临时日志写入源码目录（`worktree`），必须统一落入 `&lt;dataDirectory&gt;` / 系统 `AppData`。',
+          '严禁为前端 UI 交互单独另起一套绕过服务端版本检查与请求去重（`requestId`）的平行状态逻辑。'
+        ],
+        proto: '原子 JSON / 文件进程锁 + `@powerformer/vela-cli` HTTPS 签名接口 + BYOK HTTPS API + GitHub Releases 自动更新源。',
+        files: ['gateway/design-deploy.ts', 'gateway/account.ts', 'gateway/content-batch.ts', 'phase1.ts', 'design-projects.ts', 'workspace.ts', 'shared/process-lock.ts']
+      }
+    };
+
+    const NODES = {
+      'web-browser': {
+        kind: 'Layer 1 · 浏览器端',
+        layer: 'Layer 1 · 交互入口层',
+        boundary: 'B-A',
+        title: 'Web 浏览器端（Local / Docker / Cloud HTTPS）',
+        subtitle: '在 Chrome / Safari / Edge 中运行的完整 OpenMotion Studio Web 应用。',
+        role: '不依赖本地桌面安装即可创建视频、Design 网页、Game 原型，支持配置 `/mcp` 远程接入及下载 Bridge 安装脚本联通本机 Agent。',
+        allow: ['通过 HTTP/SSE 与本地或云端网关交互；浏览器内可通过内置浏览器自动化辅助验证网页预览与部署结果。'],
+        deny: ['受浏览器同源与沙箱限制，不得直接读取宿主机任意目录或调用本地 CLI 进程（须经由 Bridge 或本地桌面）。'],
+        proto: 'HTTPS SPA + Fetch / EventSource (SSE)',
+        files: ['studio/src/main.tsx', 'studio/src/router/createAppRouter.tsx', 'studio/vite.dev.config.ts']
+      },
+      'desktop-mac': {
+        kind: 'Layer 1 · macOS 客户端',
+        layer: 'Layer 1 · 交互入口层',
+        boundary: 'B-A',
+        title: 'macOS Electron 桌面端',
+        subtitle: '针对 macOS 原生窗口规范深度优化的桌面发行包（Universal `.dmg` / `.zip`）。',
+        role: '启用 `titleBarStyle: "hiddenInset"`，将系统红绿灯精准定位于 `{ x: 14, y: 15 }`，为顶栏注入 `78px` 左侧安全留白并在全屏事件触发时自动归零。',
+        allow: ['通过原生 macOS 菜单调用“检查更新”、“导出诊断日志”、“上报问题”及加入社区群聊。'],
+        deny: ['禁止在渲染层直接写入 CSS 硬编码左侧边距而不响应宿主全屏切换事件。'],
+        proto: 'Electron BrowserWindow (`mac`) + Preload IPC',
+        files: ['desktop/src/platform.ts', 'desktop/src/main.ts', 'studio/src/motion/ApplicationChrome.tsx']
+      },
+      'desktop-win-lin': {
+        kind: 'Layer 1 · Windows & Linux 客户端',
+        layer: 'Layer 1 · 交互入口层',
+        boundary: 'B-A',
+        title: 'Windows / Linux Electron 桌面端',
+        subtitle: '统一覆盖 Windows NSIS/Portable 与 Linux AppImage / `.deb` / `.rpm`。',
+        role: 'Windows 启用 `titleBarStyle: "hidden"` 并配合 `titleBarOverlay` 动态跟随浅色/深色主题调色板（右侧预留 `138px`）；Linux 默认无边框自定义右侧控制区（`132px`），支持环境变量回退原生窗口框。',
+        allow: ['使用共享 `IconButton` 渲染最小化 / 最大化 / 还原 / 关闭控件并双向同步窗口状态。'],
+        deny: ['不得使用未对齐设计体系 tokens 的自定义 DOM 标题栏或硬编码色值。'],
+        proto: 'Electron `titleBarOverlay` / Linux Frameless IPC',
+        files: ['desktop/src/platform.ts', 'desktop/package.json', 'studio/src/motion/ApplicationChrome.tsx', '.github/workflows/desktop-release.yml']
+      },
+      'platform-host': {
+        kind: 'Layer 1 · 平台宿主抽象桥',
+        layer: 'Layer 1 · 交互入口层',
+        boundary: 'B-A',
+        title: 'PlatformHost 与桌面生命周期组件',
+        subtitle: '参考 LobeHub / T3 Code / Open Design 实现的跨平台能力适配层。',
+        role: '向上为 Studio 提供单一 `getPlatformHost()` API：在桌面端接管品牌无边框启动动画（Splash）、分层日志落盘（main/renderer/sidecar/gpu-info）与自动更新（`electron-updater`），在 Web 端自动平滑降级。',
+        allow: ['检查 `window.openmotionDesktop` 注入能力，处理更新进度反馈与安全重启安装。'],
+        deny: ['禁止在未检测环境支持的情况下直接抛出异常阻塞 Web 渲染。'],
+        proto: 'Electron `contextBridge` API (`openmotionDesktop`)',
+        files: ['shared/platform-host.ts', 'studio/src/utils/platformHost.ts', 'desktop/src/preload.ts', 'desktop/src/splash.ts', 'desktop/src/menu.ts', 'desktop/src/updater.ts', 'desktop/src/logger.ts']
+      },
+      'http-gateway': {
+        kind: 'Layer 2 · 控制平面网关',
+        layer: 'Layer 2 · 控制平面网关',
+        boundary: 'B-B',
+        title: 'OpenMotion HTTP / SSE 控制平面网关',
+        subtitle: '全栈业务入口核心，同时托管前端静态构建产物与多端 API/MCP 路由。',
+        role: '承接 Studio 前端请求（`/motion-api/*`、`/design-api/*`）、`/mcp` 传输入口以及 `/motion-api/agent-runtimes/bridge/*` 桥接流，并守护保留路径不被 SPA 路由覆盖。',
+        allow: ['依据部署模式（本机 / 云端）执行 CORS、Origin、Host、Body 大小限制与结构化错误映射。'],
+        deny: ['任何前端路由或用户上传路径严禁占用 `/api`、`/motion-api`、`/design-api`、`/mcp` 等保留后端前缀。'],
+        proto: 'Node HTTP Server + Server-Sent Events + JSON REST',
+        files: ['server.ts', 'studio/src/router/routeRegistry.ts']
+      },
+      'token-auth': {
+        kind: 'Layer 2 · 作用域鉴权',
+        layer: 'Layer 2 · 控制平面网关',
+        boundary: 'B-B',
+        title: '作用域 Token 仓库与 HMAC 验签中心',
+        subtitle: '统一颁发并校验 MCP Token（`om_mcp_*`）、Bridge Token（`om_brg_*`）与 Trigger 密钥（`om_trg_*`）。',
+        role: '令牌原文仅在创建瞬间展示一次，磁盘文件 `agents/mcp-tokens.json` 仅保存 SHA-256 哈希；支持细粒度 `read` / `write` / `admin` 授权隔离。',
+        allow: ['允许为外部 CI、只读审查 Agent 颁发只读 Token，为云端自动化颁发受控写 Token，随时一键吊销。'],
+        deny: ['明文密钥严禁进入持久化磁盘或诊断日志 ZIP；只读 Token 调用写工具返回 JSON-RPC `-32003`。'],
+        proto: 'Bearer Auth + SHA-256 Hash + HMAC-SHA256',
+        files: ['gateway/mcp-http.ts', 'shared/mcp-http.ts', 'gateway/triggers.ts']
+      },
+      'sidecar-ctl': {
+        kind: 'Layer 2 · 桌面 Sidecar 托管',
+        layer: 'Layer 2 · 控制平面网关',
+        boundary: 'B-A / B-B',
+        title: 'Desktop Node Sidecar 进程管理器',
+        subtitle: '让 Electron 桌面应用开箱即用自带完整后端与本地 Agent/MCP 生态。',
+        role: '参考 Open Design 与 T3 Code 架构，在 Splash 页面显示期间启动 `server.ts`，绑定 `127.0.0.1` 随机空闲端口并轮询健康检查；应用退出或触发自动更新安装前优先优雅终止子进程防止文件锁死。',
+        allow: ['将数据孤立存入 `<userData>/workspace`，将崩溃标记写入 `session-state.json` 并在日志导出时脱敏打包。'],
+        deny: ['桌面 Sidecar 不得默认监听 `0.0.0.0` 公网网卡。'],
+        proto: 'Node Child Process + Loopback HTTP Healthcheck',
+        files: ['desktop/src/sidecar.ts', 'desktop/src/logger.ts', 'scripts/diagnostics.mjs']
+      },
+      'mcp-stdio': {
+        kind: 'Layer 3 · 本地 Stdio MCP',
+        layer: 'Layer 3 · 统一 MCP Hub',
+        boundary: 'B-C',
+        title: '本地 Stdio MCP 传输服务器',
+        subtitle: '桌面端开发者工具与本地 AI CLI 接入 OpenMotion 的标准零网络延迟通道。',
+        role: '通过 `.mcp.json` 定义一键接入 Codex、Claude Code、Cursor、DeepSeek Harness 等客户端，暴露 `openmotion_*` 全套工具与 `openmotion://workflow/*` 只读资源。',
+        allow: ['与 Streamable HTTP `/mcp` 共用同一份 `mcpRegistry("phase1")` 工具定义与执行管线。'],
+        deny: ['禁止依赖未展开的变量占位符路径，且仅输出规范 JSON-RPC 到 stdout。'],
+        proto: 'MCP over stdio (`node --experimental-strip-types mcp.ts`)',
+        files: ['mcp.ts', '.mcp.json']
+      },
+      'mcp-http': {
+        kind: 'Layer 3 · Streamable HTTP MCP',
+        layer: 'Layer 3 · 统一 MCP Hub',
+        boundary: 'B-B / B-C',
+        title: '远程 Streamable HTTP `/mcp` 端点',
+        subtitle: '让云端 Agent、外部脚本及远程工作站可直接通过标准 HTTP/SSE 挂载 OpenMotion。',
+        role: '完整实现 `POST /mcp`（请求与可选 SSE 响应）、`GET /mcp`（服务端推流）与 `DELETE /mcp`（显式会话注销），带 `Mcp-Session-Id` 会话管理与作用域控制。',
+        allow: ['兼容 MCP 协议 `2024-11-05`、`2025-03-26`、`2025-06-18`、`2025-11-25`，并在连接页自动生成 Claude CLI / Cursor / curl 配置。'],
+        deny: ['超过 2 MiB 请求体返回 413；未授权 Origin 返回 403；无效令牌返回 401 + `WWW-Authenticate`。'],
+        proto: 'MCP Streamable HTTP (`POST / GET / DELETE /mcp`)',
+        files: ['gateway/mcp-http.ts', 'shared/mcp-http.ts', 'studio/src/motion/AgentMcpTokensCard.tsx']
+      },
+      'mcp-registry': {
+        kind: 'Layer 3 · 公开契约守卫',
+        layer: 'Layer 3 · 统一 MCP Hub',
+        boundary: 'B-C',
+        title: '34 工具公开契约注册表（`mcpRegistry`）',
+        subtitle: '单源定义全系统公开能力、只读提示注解（`readOnlyHint`）及参数边界。',
+        role: '强力保证「任何新增或修改的核心能力，外部 Agent 都可通过公开 MCP 组合调用」，并依据 `readOnlyHint` 自动配合网关实现只读令牌防御。',
+        allow: ['新功能（如批处理优化、Webhook Trigger、云端网页发布）以独立动作或参数接入注册表，同时保持老工具向后兼容。'],
+        deny: ['禁止绕过 `mcpRegistry("phase1")` 直接把内部实验函数放行给外部调用方。'],
+        proto: 'JSON Schema + `validateInput()` 运行时守卫',
+        files: ['shared/mcp-registry.ts', 'shared/mcp-profiles.json', 'shared/design-tools.ts', 'shared/asset-tools.ts']
+      },
+      'triggers': {
+        kind: 'Layer 3 · 自动化触发器',
+        layer: 'Layer 3 · 统一 MCP Hub',
+        boundary: 'B-B / B-C',
+        title: '自动化触发引擎（Webhook / 定时 / 手动）',
+        subtitle: '支持外部系统事件与周期性任务直接触发 MCP 工具、批量优化或 Super Agent。',
+        role: '让架构不仅支持交互式对话触发，还支持外部系统推送通知（如商品上新自动批量生成详情页与视频并发包）及定时巡检优化。',
+        allow: ['支持 `Authorization: Bearer om_trg_...` 或 `X-OpenMotion-Signature: sha256=...` 验签，记录每次运行的持久化审计历史。'],
+        deny: ['定时间隔强制校验 `>= 60s`，避免恶意高频调度打满执行平面。'],
+        proto: 'Webhook POST (`/motion-api/triggers/:id/webhook`) + Cron Tick Loop',
+        files: ['gateway/triggers.ts', 'gateway/automation-host.ts', 'shared/triggers.ts', 'studio/src/motion/AgentAutomationCard.tsx']
+      },
+      'super-agent': {
+        kind: 'Layer 4 · Super Agent 编排器',
+        layer: 'Layer 4 · Agent 编排与计算平面',
+        boundary: 'B-D',
+        title: 'Super Agent 编排中枢',
+        subtitle: '驱动 Studio 内嵌 AI 创作会话与 `agent-optimize` 批量评审节点的核心引擎。',
+        role: '根据当前配置路由至 `local-direct`、`local-bridge` 或 `remote-service` 运行时，自动装配最新可用的 OpenMotion MCP 工具、上下文及产物提取（如提取最新部署 URL 渲染卡片）。',
+        allow: ['支持流式思考/工具调用回显、任务取消、失败回滚，与外部 Agent 对等调用相同 MCP 能力。'],
+        deny: ['不得在 UI 层私自拼接绕过 Domain Service 的状态修改。'],
+        proto: 'Streaming Agent Turn Engine + Structured Artifact Extraction',
+        files: ['gateway/super-agent.ts', 'shared/super-agent.ts', 'gateway/agent-runtimes.ts']
+      },
+      'rt-local': {
+        kind: 'Layer 4 · 本地直连运行时',
+        layer: 'Layer 4 · Agent 编排与计算平面',
+        boundary: 'B-D',
+        title: '`local-direct` 本机 Agent 自动识别与执行',
+        subtitle: '桌面端与本地部署一启动即可识别并激活本机已安装的主流 AI Agent CLI。',
+        role: '启动阶段通过 `LocalAgentDirectory.warmup()` 预热探测本机 CLI（Claude Code、Codex、OpenCode、Cursor、Gemini 等）及登录态，随时投入高速零网络开销的本地 Agent 对话与批量执行。',
+        allow: ['由本机控制平面安全拉起子进程并注入 loopback `/mcp` 或 stdio 连接。'],
+        deny: ['在纯远端无用户本机 CLI 环境中自动隐藏或引导至 Bridge / Remote 运行时。'],
+        proto: 'Local CLI Spawn + Loopback MCP / Stdio MCP',
+        files: ['gateway/local-agents.ts', 'shared/local-agents.ts', 'gateway/agent-discovery.ts']
+      },
+      'rt-bridge': {
+        kind: 'Layer 4 · 出站 NAT 穿透桥接',
+        layer: 'Layer 4 · Agent 编排与计算平面',
+        boundary: 'B-D',
+        title: '`local-bridge` 本地计算节点出站桥接（macOS / Linux / Windows）',
+        subtitle: '参考 Multica 架构设计，让云端网页也能无缝调度用户本地电脑的 Claude/Codex。',
+        role: '提供一键生成的 `install.sh`（macOS/Linux）与 `install.ps1`（Windows PowerShell），在用户电脑启动轻量守护脚本：仅主动发起出站 HTTPS SSE 连接接收作业，驱动本机 CLI 并通过安全通道回调云端 MCP 工具。',
+        allow: ['完全适配家庭宽带、公司内网及多层 NAT 防火墙，无需开任何入站端口映射。'],
+        deny: ['云端控制面严禁直接访问本地文件系统，本地文件读写仅限于任务显式授权的资产工作目录。'],
+        proto: 'Outbound SSE (`/bridge/stream`) + Authenticated POST (`/bridge/tool-call`)',
+        files: ['gateway/agent-bridge.ts', 'gateway/agent-bridge-script.ts', 'studio/src/motion/AgentRuntimeSettings.tsx']
+      },
+      'rt-remote': {
+        kind: 'Layer 4 · 云端 Agent 服务',
+        layer: 'Layer 4 · Agent 编排与计算平面',
+        boundary: 'B-D',
+        title: '`remote-service` 云端 Agent 运行时',
+        subtitle: '兼容遵循 `openmotion-agent-v1` 协议的云原生 / 自托管模型编排集群。',
+        role: '当终端无本机 Agent 时（如移动端、轻量云端用户或纯云端批处理），直接将推理工作负载转交远端 Agent，并接收其流式发回的 `tool.call` 帧在 OpenMotion 执行。',
+        allow: ['支持自定义 Endpoint URL 与认证头，方便接入企业私有云模型网关或三方智能体。'],
+        deny: ['禁止将远端服务发回的未校验路径直接当作本地绝对路径执行写入。'],
+        proto: '`openmotion-agent-v1` HTTP + SSE Protocol',
+        files: ['gateway/agent-service-adapter.ts', 'shared/agent-runtimes.ts', 'docs/agent-runtime-architecture.md']
+      },
+      'ext-agents': {
+        kind: 'Layer 4 · 外部 Agent 生态',
+        layer: 'Layer 4 · Agent 编排与计算平面',
+        boundary: 'B-B / B-C',
+        title: '外部 AI Agent 与第三方集成客户端',
+        subtitle: '所有非 OpenMotion 自带 UI 的外部自动化调用方集合。',
+        role: '包含本机 IDE/CLI（Codex、Claude Code、Cursor、DeepSeek Harness）以及远端云 Agent、GitHub Actions、企业自动化平台，通过 Stdio 或 `/mcp`（或 Trigger Webhook）与 OpenMotion 双向协同。',
+        allow: ['直接发现 34 个标准 MCP 工具与工作流 Skills，编写网页、剪辑视频、触发并发批处理并一键部署到云端。'],
+        deny: ['受 Bearer Token 作用域严格制约，`read` Token 无法修改工程或触发云端部署。'],
+        proto: 'MCP Stdio / Streamable HTTP `/mcp` / Trigger Webhook',
+        files: ['studio/src/motion/McpConnectionPage.tsx', 'studio/src/motion/mcpCapabilities.ts']
+      },
+      'domain-core': {
+        kind: 'Layer 5 · 共享域服务核',
+        layer: 'Layer 5 · 共享域核与外站出口',
+        boundary: 'B-E',
+        title: '单一事实源域服务层（Motion / Design / Game / Assets / Media）',
+        subtitle: '所有能力在此落地成统一原子操作与事务语义。',
+        role: '提供视频工程时间线与 Hyperframes 渲染、Design Studio HTML/PPTX/图片嵌入与评审、Game Studio、BrandKit 提取、多模态生图/生视频与资产版本管理，被 Web UI、Desktop UI 与 MCP 完全共用。',
+        allow: ['所有变更维护单调递增 `revision`、乐观并发保护（`expectedRevision`）与 `requestId` 幂等去重。'],
+        deny: ['绝对不允许在 React 组件或某一条传输适配器内再实现一套平行的数据增删改查逻辑。'],
+        proto: 'In-Process TypeScript Domain Services',
+        files: ['phase1.ts', 'design-projects.ts', 'game-projects.ts', 'gateway/scenario-runs.ts', 'gateway/asset-operations.ts', 'gateway/brand-kits.ts', 'gateway/media-use.ts']
+      },
+      'batch-engine': {
+        kind: 'Layer 5 · 批量内容优化引擎',
+        layer: 'Layer 5 · 共享域核与外站出口',
+        boundary: 'B-C / B-E',
+        title: '批量内容优化与并发生产引擎',
+        subtitle: '通过架构复用将单点创作能力放大为可并发、可重试、可导出的一站式批处理流水线。',
+        role: '支持 3 种模式：`mcp-pipeline`（多步 MCP 流水线并发执行，支持变量插值）、`agent-optimize`（调度 Super Agent 按评分准则并发改写优化）、`scenario-matrix`（场景矩阵多语言/多品类批量生产），每次最多 50 项、并发度 1~8。',
+        allow: ['既可从 Studio 界面启动，也能直接被 MCP（`openmotion_assets_use action=batch`）、Super Agent 与自动化 Trigger 调起。'],
+        deny: ['单项失败自动隔离并保留部分产出，允许 `retry_failed` 定点重试，禁止整体雪崩丢弃已生成资产。'],
+        proto: 'Bounded Concurrency Worker Queue + ZIP Bundle Export',
+        files: ['gateway/content-batch.ts', 'shared/content-batch.ts', 'studio/src/motion/AgentAutomationCard.tsx']
+      },
+      'local-store': {
+        kind: 'Layer 5 · 工作区与状态持久化',
+        layer: 'Layer 5 · 共享域核与外站出口',
+        boundary: 'B-E',
+        title: '独立工作区存储与跨进程锁（`<dataDirectory>`）',
+        subtitle: '将项目文件、版本历史、触发器审计、部署绑定预留与代码仓库严格分离。',
+        role: '通过 `atomicJson` 原子写盘与 `withProcessLock` 文件锁保证 CLI、Sidecar、Web 请求并发操作时的文件一致性与历史回滚安全。',
+        allow: ['本地测试支持通过 `MOTION_DATA_DIR` 或临时目录完全隔离运行环境。'],
+        deny: ['严禁在源码 checkout 内写入个人工程数据、Token 明文、缓存资产或临时部署产物。'],
+        proto: 'Filesystem + `atomicJson` + File Advisory Process Lock',
+        files: ['workspace.ts', 'phase1-versions.ts', 'shared/process-lock.ts']
+      },
+      'cloud-deploy': {
+        kind: 'Layer 5 · 云端发布与外站出口',
+        layer: 'Layer 5 · 共享域核与外站出口',
+        boundary: 'B-E',
+        title: 'Open Design 云端通用 HTML 发布与外部云出口',
+        subtitle: '面向 Design、Game、Motion 及任意静态 HTML 文件/目录的统一云端发布与分享通道 (`amr-api.open-design.ai`)。',
+        role: '通过 `WebPublishService`（`gateway/web-publish.ts`）与 `web-publish-bundle.ts` 自动扫描打包工作区本地媒体至 `_shared-assets/`、计算 SHA-256 `freshness` 过期指纹，并驱动 `@powerformer/vela-cli` 执行工作区绑定、安全暂存过滤（剥离 `.env` / `.git` / 符号链接）、`_commentFiles` 收据入账验证与稳定 slug 绑定，为任意 HTML 产物生成唯一 `https://open-design.app/artifact/<projectId>/<slug>` 链接，并收口 BYOK 与桌面更新。',
+        allow: ['支持通过 Design Studio / Game Studio / Super Agent `ArtifactBrowserPane` 共享的 `WebPublishPopover`（「Share」弹窗）、`openmotion_assets_use(action="web_publish")` 或 `openmotion_design_project(action="deploy")` 完成一键发布、更新、暂停与恢复。'],
+        deny: ['对任何非 HTTPS、包含凭据信息或不符合 canonical path 规范的分享链接一律拦截，防止链接伪造。'],
+        proto: '`@powerformer/vela-cli` + HTTPS OpenDesign Cloud API + BYOK HTTPS',
+        files: ['shared/web-publish.ts', 'gateway/web-publish.ts', 'gateway/web-publish-bundle.ts', 'gateway/web-publish-ops.ts', 'gateway/design-deploy.ts', 'studio/src/components/WebPublishPopover.tsx', 'studio/src/super-agent/ArtifactBrowserPane.tsx']
+      }
+    };
+
+    const FLOWS = {
+      'all': {
+        title: '全景视图 · OpenMotion 跨端 5 层架构与 5 大核心边界',
+        subtitle: '展示 Web、Mac/Win/Linux 桌面、统一控制平面网关、MCP Hub、多运行时 Agent 及共享域服务的全局边界结构。',
+        role: '任意节点或边界红线皆可点击查看详尽的允许清单、禁止越界红线、通信协议与对应源码路径。',
+        allow: [
+          '内部 Web/桌面端与外部 AI Agent、自动化 Trigger 全部经由同一份 34 工具契约与共享 Domain Core 执行，零逻辑分裂。',
+          '所有敏感凭证与项目存储全部收敛于 <dataDirectory>，桌面层通过 PlatformHost 与 Sidecar 完成操作系统隔离。'
+        ],
+        deny: [
+          '不允许渲染层越权接触系统密钥，不允许云端控制面反向探测内网，不允许发布流程携带 .env 或绕过版本锁。'
+        ],
+        proto: 'Electron IPC ↔ Loopback/HTTPS ↔ MCP (Stdio / Streamable HTTP) ↔ Outbound Bridge SSE ↔ Domain Core',
+        files: ['docs/cross-platform-mcp-architecture.md', 'server.ts', 'mcp.ts', 'shared/mcp-registry.ts'],
+        nodes: Object.keys(NODES),
+        boundaries: Object.keys(BOUNDARIES),
+        edges: [
+          ['web-browser', 'http-gateway'], ['desktop-mac', 'platform-host'], ['desktop-win-lin', 'platform-host'],
+          ['platform-host', 'sidecar-ctl'], ['sidecar-ctl', 'http-gateway'],
+          ['http-gateway', 'token-auth'], ['http-gateway', 'mcp-http'], ['http-gateway', 'super-agent'], ['http-gateway', 'triggers'],
+          ['ext-agents', 'mcp-stdio'], ['ext-agents', 'mcp-http'],
+          ['mcp-stdio', 'mcp-registry'], ['mcp-http', 'mcp-registry'], ['triggers', 'mcp-registry'],
+          ['super-agent', 'rt-local'], ['super-agent', 'rt-bridge'], ['super-agent', 'rt-remote'],
+          ['rt-local', 'mcp-registry'], ['rt-bridge', 'mcp-http'], ['rt-remote', 'mcp-http'],
+          ['mcp-registry', 'domain-core'], ['mcp-registry', 'batch-engine'], ['triggers', 'batch-engine'],
+          ['batch-engine', 'domain-core'], ['batch-engine', 'super-agent'],
+          ['domain-core', 'local-store'], ['domain-core', 'cloud-deploy']
+        ],
+        steps: []
+      },
+      'internal-agent': {
+        title: '链路 1 · 内部 Web / Mac / Win / Linux 客户端 → Agent → MCP → 域服务',
+        subtitle: '用户直接在 OpenMotion 浏览器或 3 端桌面客户端中通过 Super Agent 自动编排创作并调用内部 MCP 能力。',
+        role: '验证端到端闭环（a）：前端壳层仅负责交互体验，所有创作与读写均回归 Agent → 统一 MCP 契约 → 共享域核。',
+        allow: ['桌面端自动启用 local-direct 预热的本机 CLI；网页端按需调度 Bridge 或云端 Agent 运行时。'],
+        deny: ['Studio 前端不直接执行文件级并发修改或自行维护离线状态分支。'],
+        proto: 'SPA Fetch/SSE → server.ts → Super Agent → Local/Cloud Agent → MCP → Phase1/Design/Media Core',
+        files: ['studio/src/utils/platformHost.ts', 'desktop/src/sidecar.ts', 'gateway/super-agent.ts', 'gateway/local-agents.ts', 'phase1.ts'],
+        nodes: ['web-browser', 'desktop-mac', 'desktop-win-lin', 'platform-host', 'sidecar-ctl', 'http-gateway', 'super-agent', 'rt-local', 'mcp-stdio', 'mcp-registry', 'domain-core', 'local-store'],
+        boundaries: ['B-A', 'B-C', 'B-D'],
+        edges: [
+          ['web-browser', 'http-gateway'], ['desktop-mac', 'platform-host'], ['desktop-win-lin', 'platform-host'],
+          ['platform-host', 'sidecar-ctl'], ['sidecar-ctl', 'http-gateway'], ['http-gateway', 'super-agent'],
+          ['super-agent', 'rt-local'], ['rt-local', 'mcp-stdio'], ['mcp-stdio', 'mcp-registry'],
+          ['mcp-registry', 'domain-core'], ['domain-core', 'local-store']
+        ],
+        steps: [
+          'Web 浏览器或 3 端桌面客户端经 `PlatformHost` 与本地 `Sidecar` / 云端网关建立连接。',
+          '`server.ts` 网关接收对话请求并转发给 `Super Agent` 编排器。',
+          '`Super Agent` 选中桌面本机已预热的 `local-direct` Agent CLI（如 Codex / Claude Code）。',
+          '本机 CLI 通过本地 `Stdio MCP`（或本机 `/mcp`）经由 `34 工具契约守卫` 调用域服务并落盘。'
+        ]
+      },
+      'cloud-bridge': {
+        title: '链路 2 · 云端 Web → `local-bridge`（NAT 穿透调度用户本机 Agent）',
+        subtitle: '即使用户的云端 OpenMotion 部署在公网服务器，用户在电脑端运行一条命令即可将本地 Agent 安全挂入云端工作区。',
+        role: '彻底解决云端容器无法穿透用户家庭/办公 NAT 防火墙直连本地 CLI 的痛点（参考 Multica 控制面/计算面分离）。',
+        allow: ['用户终端运行 `install.sh`（macOS/Linux）或 `install.ps1`（Windows PowerShell）主动建立出站长连接。'],
+        deny: ['云端控制面严禁向用户公网 IP 发起入站连接；所有 Bridge 请求必须携带单户独立签发的 `om_brg_*` 令牌。'],
+        proto: 'Cloud SPA → server.ts → Super Agent → Outbound SSE (/bridge/stream) ↔ User CLI ↔ POST (/bridge/tool-call) → HTTP /mcp',
+        files: ['gateway/agent-bridge.ts', 'gateway/agent-bridge-script.ts', 'gateway/super-agent.ts', 'gateway/mcp-http.ts'],
+        nodes: ['web-browser', 'http-gateway', 'token-auth', 'super-agent', 'rt-bridge', 'mcp-http', 'mcp-registry', 'domain-core', 'local-store'],
+        boundaries: ['B-B', 'B-D', 'B-E'],
+        edges: [
+          ['web-browser', 'http-gateway'], ['http-gateway', 'token-auth'], ['http-gateway', 'super-agent'],
+          ['super-agent', 'rt-bridge'], ['rt-bridge', 'mcp-http'], ['mcp-http', 'mcp-registry'],
+          ['mcp-registry', 'domain-core'], ['domain-core', 'local-store']
+        ],
+        steps: [
+          '用户在浏览器打开云端工作区并复制由 `agent-bridge-script.ts` 生成的 `install.sh` / `install.ps1`。',
+          '用户本机运行脚本，带上 `om_brg_*` 令牌主动向云端网关发起**仅出站** SSE 连接。',
+          '云端 `Super Agent` 将创作任务下发给该已在线的 `local-bridge` 会话，由本机 Agent CLI 执行推理。',
+          '本机 Agent 发起的 MCP 工具请求通过桥接通道安全回传云端 `/mcp`（或 `/bridge/tool-call`），更新云端工作区资产。'
+        ]
+      },
+      'external-mcp': {
+        title: '链路 3 · 外部 Agent → 统一 MCP（Stdio / Streamable HTTP `/mcp`）',
+        subtitle: '外部客户端（Codex、Claude Code、Cursor、云端 Agent、自研服务）直接把 OpenMotion 作为工具服务接入。',
+        role: '验证端到端闭环（b）：外部主体只须配置一段 `.mcp.json` 或带有 Bearer Token 的 Streamable HTTP 地址即可编排 OpenMotion。',
+        allow: ['外部客户端通过 `initialize` → `tools/list` → `tools/call` 组合视频剪辑、设计稿改写、批处理与网页部署。'],
+        deny: ['只读令牌（`scope="read"`）无法越权调用任意修改/生成/部署类工具，会在网关直接阻断。'],
+        proto: 'Stdio JSON-RPC (`mcp.ts`) 或 Streamable HTTP `POST / GET / DELETE /mcp` + Bearer `om_mcp_*`',
+        files: ['mcp.ts', '.mcp.json', 'gateway/mcp-http.ts', 'shared/mcp-registry.ts', 'tests/mcp-http.test.ts'],
+        nodes: ['ext-agents', 'token-auth', 'mcp-stdio', 'mcp-http', 'mcp-registry', 'domain-core', 'local-store'],
+        boundaries: ['B-B', 'B-C'],
+        edges: [
+          ['ext-agents', 'mcp-stdio'], ['ext-agents', 'mcp-http'], ['mcp-http', 'token-auth'],
+          ['mcp-stdio', 'mcp-registry'], ['mcp-http', 'mcp-registry'],
+          ['mcp-registry', 'domain-core'], ['domain-core', 'local-store']
+        ],
+        steps: [
+          '本机外部宿主直接通过 `.mcp.json` 启动 `mcp.ts`（stdio），远端外部 Agent 则连接带 `Authorization: Bearer om_mcp_*` 的 `/mcp`。',
+          '`token-auth` 与 `mcp-http` 完成作用域鉴权、Origin 校验与 `Mcp-Session-Id` 分配。',
+          '所有调用统一落入 `34 工具公开契约守卫`（`mcpRegistry("phase1")`），执行 Schema 验证与工具路由。',
+          '`domain-core` 完成实际渲染/写入操作并将更新后版本号持久化回 `<dataDirectory>`。'
+        ]
+      },
+      'batch-trigger': {
+        title: '链路 4 · 批量内容优化 & Webhook / 定时 Trigger 自动化',
+        subtitle: '将单次创作流程提升至并发批处理（最多 50 项、并发度 1~8）与无人值守定时/事件自动触发。',
+        role: '同时支持从 UI 控制台、内部 Agent 与外部 MCP（`openmotion_assets_use action=batch|trigger`）稳定驱动大规模内容变体生成与优化。',
+        allow: ['`mcp-pipeline`（确定性流水线）、`agent-optimize`（AI 按标准迭代打磨）、`scenario-matrix`（多维场景矩阵）。'],
+        deny: ['Trigger 定时间隔不可低于 60s；入站 Webhook 未过 Token 或 HMAC-SHA256 验签一律拒绝执行。'],
+        proto: 'Trigger Webhook (HMAC) / Interval Scheduler → `automation-host` → `ContentBatchService` (Worker Pool) → ZIP Export',
+        files: ['gateway/content-batch.ts', 'shared/content-batch.ts', 'gateway/triggers.ts', 'gateway/automation-host.ts', 'studio/src/motion/AgentAutomationCard.tsx'],
+        nodes: ['ext-agents', 'http-gateway', 'token-auth', 'triggers', 'mcp-registry', 'batch-engine', 'super-agent', 'domain-core', 'local-store'],
+        boundaries: ['B-B', 'B-C', 'B-E'],
+        edges: [
+          ['ext-agents', 'http-gateway'], ['http-gateway', 'token-auth'], ['http-gateway', 'triggers'],
+          ['triggers', 'mcp-registry'], ['triggers', 'batch-engine'], ['mcp-registry', 'batch-engine'],
+          ['batch-engine', 'super-agent'], ['batch-engine', 'domain-core'], ['domain-core', 'local-store']
+        ],
+        steps: [
+          '外部 Webhook（带 HMAC 签名）、系统定时 Tick（>=60s）或 MCP 调用触达 `triggers` 与 `batch-engine`。',
+          '`ContentBatchService` 按设定的并发度拉起任务队列（最多 50 项），自动隔离单项故障。',
+          '在 `agent-optimize` 模式下回调 `Super Agent` 逐项评审润色；在 `mcp-pipeline` / `scenario-matrix` 模式下复用域核生成资产。',
+          '所有产出的媒体、网页或文案版本持久化入库并支持 `retry_failed` 断点补跑与一键 ZIP 导出。'
+        ]
+      },
+      'cloud-deploy': {
+        title: '链路 5 · 通用 HTML 云端发布（Design / Game / HTML）与唯一分享链接闭环',
+        subtitle: '将 Design Studio 页面、Game Studio 游戏或任意静态 HTML 文件/目录一键发布到 Open Design Cloud，通过同一套域服务、本地资源打包器与 `WebPublishPopover` 服务于全端 UI 与外部 MCP。',
+        role: '通过 `WebPublishService` 统一抽象、`web-publish-bundle.ts` 自动抓取工作区媒体至 `_shared-assets/` 及 `targetKind` (`design` | `game` | `html` | `motion`) 解耦，实现 SHA-256 内容新鲜度（`freshness`）检测、安全过滤上传、收据入账校验及云端分享链接全生命周期管理。',
+        allow: ['通过 `openmotion_assets_use(action="web_publish", ...)`、`openmotion_design_project(action="deploy")`、`/motion-api/web-publish/:kind/:id` 或 Design / Game / Super Agent `ArtifactBrowserPane` 共享的 `WebPublishPopover` 执行全流程管理。'],
+        deny: ['自动剥离 `.env*`、`.git`、`node_modules` 及符号链接；停止后的分享链接不可在未明确声明 `resume` 或 `new_link` 时静默覆盖。'],
+        proto: 'Studio / HTTP `/mcp` → `WebPublishService` + `web-publish-bundle.ts` → `@powerformer/vela-cli` → `https://open-design.app/artifact/...`',
+        files: ['shared/web-publish.ts', 'gateway/web-publish.ts', 'gateway/web-publish-bundle.ts', 'gateway/web-publish-ops.ts', 'gateway/design-deploy.ts', 'studio/src/components/WebPublishPopover.tsx', 'studio/src/super-agent/ArtifactBrowserPane.tsx', 'tests/e2e-deploy-game-chain.test.ts'],
+        nodes: ['web-browser', 'ext-agents', 'http-gateway', 'mcp-http', 'mcp-registry', 'domain-core', 'local-store', 'cloud-deploy'],
+        boundaries: ['B-B', 'B-C', 'B-E'],
+        edges: [
+          ['web-browser', 'http-gateway'], ['ext-agents', 'mcp-http'], ['http-gateway', 'mcp-http'],
+          ['mcp-http', 'mcp-registry'], ['mcp-registry', 'domain-core'],
+          ['domain-core', 'local-store'], ['domain-core', 'cloud-deploy']
+        ],
+        steps: [
+          '用户在 Design Studio、Game Studio 或 Super Agent `ArtifactBrowserPane` 点击共享「Share」弹窗（`WebPublishPopover`），或外部 Agent 经由 `/mcp` 调用 `openmotion_assets_use(action="web_publish", ...)` / `openmotion_design_project(action="deploy")`。',
+          '`WebPublishService` 与 `web-publish-bundle.ts` 解析目标类型（`design` / `game` / `html` / `motion`），自动打包 `/motion-api/assets/...` 至 `_shared-assets/`、计算 SHA-256 `freshness`，并在 `<dataDirectory>/web-publications/` 锁定唯一 `slug` 与 `sourceFileId`。',
+          '安全暂存过滤后调用 `@powerformer/vela-cli` 依次完成：`ensure-private` → `register-resource` → `resource push` → `_commentFiles` 收据入账回读校验 → `share publish`。',
+          '校验并持久化云端返回的唯一 HTTPS 分享链接（`https://open-design.app/artifact/<projectId>/<slug>`），支持后续同链升级、暂停与恢复。'
+        ]
+      }
+    };
+
+    const MATRIX_ROWS = [
+      { id: 'B-A', sides: 'Studio 前端 ↔ OS 原生外壳', proto: 'Electron contextBridge IPC', deny: '禁止渲染进程启用 nodeIntegration / 直接触碰本机密钥与底层 FS', files: 'shared/platform-host.ts · desktop/src/preload.ts · desktop/src/platform.ts' },
+      { id: 'B-B', sides: '网络入口 ↔ 控制平面网关', proto: 'Loopback / HTTPS + Bearer Token (SHA-256) + HMAC', deny: '云端严禁无 Token 放行 `/mcp`；`read` 令牌严禁越权写入 (`-32003`)', files: 'server.ts · desktop/src/sidecar.ts · gateway/mcp-http.ts' },
+      { id: 'B-C', sides: 'Agent / 触发器 ↔ 公开 MCP Hub', proto: 'MCP JSON-RPC 2.0 (Stdio & Streamable HTTP)', deny: '严禁暴露未入库私房工具；严禁绕过 `mcpRegistry` 参数校验', files: 'mcp.ts · shared/mcp-registry.ts · shared/mcp-profiles.json' },
+      { id: 'B-D', sides: '云端控制面 ↔ 计算运行时 (Bridge/CLI)', proto: '本地预热直连 / 出站 SSE Bridge / openmotion-agent-v1', deny: '严禁服务端反向入站扫描用户电脑私有端口（必须用户端主动出站接入）', files: 'gateway/super-agent.ts · gateway/agent-bridge.ts · gateway/local-agents.ts' },
+      { id: 'B-E', sides: '共享域服务核 ↔ 存储 & 外部云出口', proto: '文件进程锁 + atomicJson + vela-cli HTTPS + BYOK', deny: '严禁上传 `.env` / `.git` / 符号链接；严禁把凭证与用户数据写入源码库', files: 'gateway/web-publish.ts · gateway/content-batch.ts · shared/process-lock.ts' }
+    ];
+
+    const stageEl = document.getElementById('canvas-stage');
+    const svgEl = document.getElementById('diagram-edges');
+    const matrixBody = document.getElementById('matrix-body');
+    const flowBtns = Array.from(document.querySelectorAll('[data-flow]'));
+    const nodeEls = Array.from(document.querySelectorAll('[data-node]'));
+    const boundaryEls = Array.from(document.querySelectorAll('[data-boundary]'));
+    const redlineBtn = document.getElementById('toggle-redlines');
+    const themeBtn = document.getElementById('toggle-theme');
+
+    let activeFlow = 'all';
+    let selectedTarget = { type: 'flow', id: 'all' };
+    let showRedlines = true;
+
+    function formatRich(str) {
+      const escaped = String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return escaped
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    }
+
+    function renderInspector() {
+      const flow = FLOWS[activeFlow];
+      let item = flow;
+      let badgesHtml = '';
+
+      if (selectedTarget.type === 'node' && NODES[selectedTarget.id]) {
+        item = NODES[selectedTarget.id];
+        badgesHtml = `<span class="badge layer">${formatRich(item.layer)}</span><span class="badge boundary">所属边界 ${formatRich(item.boundary)}</span>`;
+      } else if (selectedTarget.type === 'boundary' && BOUNDARIES[selectedTarget.id]) {
+        item = BOUNDARIES[selectedTarget.id];
+        badgesHtml = `<span class="badge boundary">${formatRich(item.kind)}</span><span class="badge layer">${formatRich(item.layer)}</span>`;
+      } else {
+        badgesHtml = `<span class="badge layer">视角 · ${activeFlow === 'all' ? '全局拓扑' : '调用链路高亮'}</span><span class="badge">节点 ${flow.nodes.length} · 边界 ${flow.boundaries.length}</span>`;
+      }
+
+      document.getElementById('insp-badges').innerHTML = badgesHtml;
+      document.getElementById('insp-title').innerHTML = formatRich(item.title);
+      document.getElementById('insp-subtitle').innerHTML = formatRich(item.subtitle);
+      document.getElementById('insp-role').innerHTML = formatRich(item.role);
+      document.getElementById('insp-allow').innerHTML = item.allow.map(t => `<li>${formatRich(t)}</li>`).join('');
+      document.getElementById('insp-deny').innerHTML = item.deny.map(t => `<li>${formatRich(t)}</li>`).join('');
+      document.getElementById('insp-proto').innerHTML = formatRich(item.proto);
+      document.getElementById('insp-files').innerHTML = item.files.map(f => `<span class="file-chip">${formatRich(f)}</span>`).join('');
+
+      const seqWrap = document.getElementById('insp-sequence-wrap');
+      const seqEl = document.getElementById('insp-sequence');
+      if (flow.steps && flow.steps.length > 0) {
+        seqWrap.style.display = 'flex';
+        seqEl.innerHTML = flow.steps.map((s, idx) => `<li class="sequence-item"><span class="seq-num">${idx + 1}</span><span>${formatRich(s)}</span></li>`).join('');
+      } else {
+        seqWrap.style.display = 'none';
+        seqEl.innerHTML = '';
+      }
+    }
+
+    function applyState() {
+      const flow = FLOWS[activeFlow];
+      const hitNodes = new Set(flow.nodes);
+
+      for (const btn of flowBtns) {
+        btn.classList.toggle('active', btn.dataset.flow === activeFlow);
+      }
+
+      for (const el of nodeEls) {
+        const id = el.dataset.node;
+        const isHit = activeFlow === 'all' ? false : hitNodes.has(id);
+        const isDimmed = activeFlow !== 'all' && !hitNodes.has(id);
+        el.classList.toggle('flow-hit', isHit);
+        el.classList.toggle('dimmed', isDimmed);
+        el.classList.toggle('selected', selectedTarget.type === 'node' && selectedTarget.id === id);
+
+        const stepEl = el.querySelector('.node-step');
+        if (activeFlow !== 'all' && hitNodes.has(id)) {
+          const order = flow.nodes.indexOf(id) + 1;
+          stepEl.textContent = '#' + order;
+          stepEl.setAttribute('data-visible', 'true');
+        } else {
+          stepEl.textContent = '';
+          stepEl.setAttribute('data-visible', 'false');
+        }
+      }
+
+      for (const el of boundaryEls) {
+        const bid = el.dataset.boundary;
+        const isSelected = selectedTarget.type === 'boundary' && selectedTarget.id === bid;
+        el.classList.toggle('selected', isSelected);
+      }
+
+      for (const tr of matrixBody.querySelectorAll('tr')) {
+        const bid = tr.dataset.rowBoundary;
+        tr.classList.toggle('active-row', selectedTarget.type === 'boundary' && selectedTarget.id === bid);
+      }
+
+      stageEl.classList.toggle('redlines-on', showRedlines);
+      renderInspector();
+      requestAnimationFrame(drawEdges);
+    }
+
+    function drawEdges() {
+      const rect = stageEl.getBoundingClientRect();
+      const width = Math.max(1, Math.round(stageEl.scrollWidth));
+      const height = Math.max(1, Math.round(stageEl.scrollHeight));
+      svgEl.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svgEl.setAttribute('width', String(width));
+      svgEl.setAttribute('height', String(height));
+      svgEl.style.width = `${width}px`;
+      svgEl.style.height = `${height}px`;
+
+      const coords = new Map();
+      for (const el of nodeEls) {
+        const r = el.getBoundingClientRect();
+        coords.set(el.dataset.node, {
+          left: r.left - rect.left,
+          right: r.right - rect.left,
+          top: r.top - rect.top,
+          bottom: r.bottom - rect.top,
+          cx: r.left - rect.left + r.width / 2,
+          cy: r.top - rect.top + r.height / 2,
+          w: r.width,
+          h: r.height
+        });
+      }
+
+      const activeFlowDef = FLOWS[activeFlow];
+      const activePairs = new Set(activeFlowDef.edges.map(([a, b]) => `${a}->${b}`));
+      const allEdges = FLOWS.all.edges;
+
+      // Track outgoing & incoming port counts so parallel connections spread out neatly
+      const outTotals = new Map();
+      const inTotals = new Map();
+      for (const [a, b] of allEdges) {
+        outTotals.set(a, (outTotals.get(a) || 0) + 1);
+        inTotals.set(b, (inTotals.get(b) || 0) + 1);
+      }
+      const outSeen = new Map();
+      const inSeen = new Map();
+
+      let paths = `
+        <defs>
+          <marker id="arr-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="var(--edge-muted)"></path>
+          </marker>
+          <marker id="arr-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+            <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="var(--accent)"></path>
+          </marker>
+        </defs>`;
+
+      for (const [fromId, toId] of allEdges) {
+        const a = coords.get(fromId);
+        const b = coords.get(toId);
+        if (!a || !b) continue;
+
+        const outIdx = outSeen.get(fromId) || 0;
+        outSeen.set(fromId, outIdx + 1);
+        const inIdx = inSeen.get(toId) || 0;
+        inSeen.set(toId, inIdx + 1);
+
+        const isSameBand = Math.abs(a.cy - b.cy) < 42;
+        let x1, y1, x2, y2, d;
+
+        if (isSameBand) {
+          const leftToRight = a.cx <= b.cx;
+          x1 = leftToRight ? a.right : a.left;
+          y1 = a.cy;
+          x2 = leftToRight ? b.left : b.right;
+          y2 = b.cy;
+          const dx = Math.max(24, Math.abs(x2 - x1) * 0.45);
+          d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${(leftToRight ? x1 + dx : x1 - dx).toFixed(1)} ${y1.toFixed(1)}, ${(leftToRight ? x2 - dx : x2 + dx).toFixed(1)} ${y2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+        } else {
+          const downward = a.cy < b.cy;
+          const outCount = outTotals.get(fromId) || 1;
+          const inCount = inTotals.get(toId) || 1;
+          const outSpread = (outIdx - (outCount - 1) / 2) * 14;
+          const inSpread = (inIdx - (inCount - 1) / 2) * 14;
+          x1 = a.cx + Math.max(-a.w * 0.32, Math.min(a.w * 0.32, outSpread));
+          y1 = downward ? a.bottom : a.top;
+          x2 = b.cx + Math.max(-b.w * 0.32, Math.min(b.w * 0.32, inSpread));
+          y2 = downward ? b.top : b.bottom;
+          const vSpan = Math.abs(y2 - y1);
+          const cy = (y1 + y2) / 2;
+          // Gently steer multi-layer skip edges along the outer gutter so they avoid centered boundary pills
+          if (vSpan > 260 && x1 < width * 0.45 && x2 < width * 0.45) {
+            const laneX = Math.max(10, Math.min(x1, x2) - 42);
+            d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${laneX.toFixed(1)} ${(y1 + vSpan * 0.32).toFixed(1)}, ${laneX.toFixed(1)} ${(y2 - vSpan * 0.32).toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+          } else {
+            d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${x1.toFixed(1)} ${cy.toFixed(1)}, ${x2.toFixed(1)} ${cy.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+          }
+        }
+
+        const pairKey = `${fromId}->${toId}`;
+        const isFlowActive = activeFlow !== 'all' && activePairs.has(pairKey);
+        const isNodeFocused = selectedTarget.type === 'node' && (selectedTarget.id === fromId || selectedTarget.id === toId);
+        const isDimmed = (activeFlow !== 'all' && !isFlowActive) || (activeFlow === 'all' && selectedTarget.type === 'node' && !isNodeFocused);
+        const highlighted = isFlowActive || (activeFlow === 'all' && isNodeFocused);
+
+        const cls = ['edge-path'];
+        if (highlighted) cls.push('active');
+        else if (isDimmed) cls.push('dimmed');
+        if (fromId === 'rt-bridge' || toId === 'rt-bridge') cls.push('dashed');
+
+        const marker = highlighted ? 'url(#arr-accent)' : 'url(#arr-muted)';
+        paths += `<path class="${cls.join(' ')}" d="${d}" marker-end="${marker}" />`;
+      }
+
+      svgEl.innerHTML = paths;
+    }
+
+    function renderMatrix() {
+      matrixBody.innerHTML = MATRIX_ROWS.map(row => `
+        <tr data-row-boundary="${row.id}">
+          <td><strong>${row.id}</strong></td>
+          <td>${formatRich(row.sides)}</td>
+          <td>${formatRich(row.proto)}</td>
+          <td>${formatRich(row.deny)}</td>
+          <td><code>${formatRich(row.files)}</code></td>
+        </tr>
+      `).join('');
+
+      for (const tr of matrixBody.querySelectorAll('tr')) {
+        tr.addEventListener('click', () => {
+          selectedTarget = { type: 'boundary', id: tr.dataset.rowBoundary };
+          applyState();
+        });
+      }
+    }
+
+    for (const btn of flowBtns) {
+      btn.addEventListener('click', () => {
+        activeFlow = btn.dataset.flow;
+        selectedTarget = { type: 'flow', id: activeFlow };
+        applyState();
+      });
+    }
+
+    for (const el of nodeEls) {
+      el.addEventListener('click', () => {
+        selectedTarget = { type: 'node', id: el.dataset.node };
+        applyState();
+      });
+    }
+
+    for (const el of boundaryEls) {
+      el.addEventListener('click', () => {
+        selectedTarget = { type: 'boundary', id: el.dataset.boundary };
+        applyState();
+      });
+    }
+
+    redlineBtn.addEventListener('click', () => {
+      showRedlines = !showRedlines;
+      redlineBtn.setAttribute('aria-pressed', String(showRedlines));
+      redlineBtn.textContent = showRedlines ? '边界红线 · 开启' : '边界红线 · 隐藏';
+      applyState();
+    });
+
+    themeBtn.addEventListener('click', () => {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      themeBtn.setAttribute('aria-pressed', String(next === 'dark'));
+      themeBtn.textContent = next === 'dark' ? '切换浅色' : '切换深色';
+      requestAnimationFrame(drawEdges);
+    });
+
+    const resizeObserver = new ResizeObserver(() => drawEdges());
+    resizeObserver.observe(stageEl);
+    window.addEventListener('resize', drawEdges);
+
+    renderMatrix();
+    applyState();
+  </script>
+</body>
+</html>

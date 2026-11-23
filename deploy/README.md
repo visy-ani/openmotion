@@ -19,7 +19,8 @@ docker compose up -d
 Open `http://127.0.0.1:4173`.
 
 Projects, exports and settings are stored in the `openmotion_data` volume,
-mounted at `/data` (`MOTION_DATA_DIR`). `docker compose down` keeps the volume;
+mounted at `/data` (`MOTION_DATA_DIR`); the OpenDesign account sign-in stays in the
+same volume under `/data/account` (`MOTION_ACCOUNT_DIR`). `docker compose down` keeps the volume;
 `docker compose down -v` deletes it together with every project in it.
 
 ## Connect an Agent
@@ -97,3 +98,11 @@ to Agents use `127.0.0.1`.
   not affected.
 - Linux is not a pinned native runtime target; the image uses Debian's Chromium
   and FFmpeg instead of the versions in `scripts/runtime-lock.json`.
+
+## Cloud deployment (`docker-compose.cloud.yml`)
+
+To deploy OpenMotion as a cloud or team control plane behind a TLS reverse proxy:
+
+1. Set `MOTION_PUBLIC_ORIGIN` (and optional `MOTION_ALLOWED_HOSTS`) in `deploy/.env`.
+2. Start with `docker compose -f docker-compose.cloud.yml up -d`.
+3. Generate scoped Streamable HTTP MCP tokens (`om_mcp_*`) in **Settings -> Local Agents -> Runtimes & Cloud Bridge** for remote Agents, or generate bridge tokens (`om_brg_*`) so macOS, Windows, and Linux workstations connect local Agents outbound over SSE.

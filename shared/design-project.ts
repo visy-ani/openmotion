@@ -6,6 +6,12 @@
  */
 import type { ReviewAnnotation } from './review-comments.ts';
 import { guideUrl, setupGuideUrl, setupReadmeUrl, setupSkillUrl, type IntegrationInfo } from './integration.ts';
+import type {
+  WebPublicationRecord,
+  WebPublishMode,
+  WebPublishStatus,
+  WebPublishStatusResponse,
+} from './web-publish.ts';
 
 export const DESIGN_API = '/motion-api/design';
 export const DESIGN_TOOL_NAMES = ['openmotion_design_catalog', 'openmotion_design_project', 'openmotion_design_edit', 'openmotion_design_comments'] as const;
@@ -64,6 +70,11 @@ export type DesignViewportId = typeof designViewports[number]['id'];
 export const designExportFormats = ['zip', 'open-design', 'html', 'pdf', 'png', 'pptx'] as const;
 export type DesignExportFormat = typeof designExportFormats[number];
 
+export type DesignDeployMode = WebPublishMode;
+export type DesignDeploymentStatus = WebPublishStatus;
+export type DesignDeploymentRecord = WebPublicationRecord;
+export type DesignDeployStatusResponse = WebPublishStatusResponse;
+
 export type DesignProject = {
   id: string; title: string; scenario: DesignScenarioId; entry: string;
   designSystemId: string | null; templateId: string | null;
@@ -121,19 +132,21 @@ export const designRoutes = {
   projectAction: (id: string, action: 'duplicate' | 'trash' | 'restore' | 'open-in' | 'reveal') => `${DESIGN_API}/projects/${id}/${action}`, // POST
   file: (id: string, path: string) => `${DESIGN_API}/projects/${id}/files/${path}`,   // GET text content {path, content, revision}
   write: (id: string) => `${DESIGN_API}/projects/${id}/write`,    // POST {requestId, expectedRevision, files:[{path,content}], deletes?:[], summary?, source:'manual'}
+  importAsset: (id: string) => `${DESIGN_API}/projects/${id}/import-asset`, // POST {requestId, expectedRevision, assetId, versionId, path?}
   raw: (id: string, path = '') => `${DESIGN_API}/raw/${id}/${path}`, // GET static preview (sandboxed iframe src); ?version=<id> for history
   versions: (id: string) => `${DESIGN_API}/projects/${id}/versions`, // GET
   restore: (id: string, versionId: string) => `${DESIGN_API}/projects/${id}/versions/${versionId}/restore`, // POST {requestId, expectedRevision}
   comments: (id: string) => `${DESIGN_API}/projects/${id}/comments`, // GET · POST {requestId, text, anchor, expectedRevision}
   comment: (id: string, commentId: string) => `${DESIGN_API}/projects/${id}/comments/${commentId}`, // PATCH {status|text, expectedCommentRevision} · DELETE
   exportProject: (id: string) => `${DESIGN_API}/projects/${id}/export`, // POST {format, versionId?, filePath?} → binary download
+  deploy: (id: string) => `${DESIGN_API}/projects/${id}/deploy`, // GET status · POST {filePath?, workspaceId?, deployMode?} · DELETE unpublish
   importProjects: `${DESIGN_API}/import`,                         // POST multipart file (zip) or JSON {sourcePath}
   editors: `${DESIGN_API}/editors`,                               // GET DesignEditorApp[]
   events: (id: string) => `${DESIGN_API}/projects/${id}/state`,   // GET {revision, versionId, openComments} for cheap polling
 } as const;
 
 /** Studio editor deep link. Design projects never use the Motion #project/ hash. */
-export const designEditorHref = (projectId: string) => `/?page=design&scene=projects&designProject=${encodeURIComponent(projectId)}`;
+export const designEditorHref = (projectId: string) => `/design/projects/${encodeURIComponent(projectId)}`;
 
 const fence = (value: string) => value.replace(/```/g, '`\u200b``');
 

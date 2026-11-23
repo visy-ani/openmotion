@@ -7,13 +7,28 @@ import type { AssetDraft } from './AssetComposer';
 import { assetRequest, uploadLibraryAsset } from './assetClient';
 import { AssetUploadError } from './assetUploadError';
 import type { LibraryAsset } from '../../../shared/asset-library';
+import type { GameCard } from '../../../shared/game-contract';
+import { gameApi } from './game/gameCatalog';
 
 vi.mock('../i18n/I18n', () => ({ useI18n: () => ({ t: (text: string, values?: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (match, key) => String(values?.[key] ?? match)), formatDate: () => 'Nov 15' }) }));
 vi.mock('./ResizablePane', () => ({ ResizablePane: ({ children }: { children: ReactNode }) => <div>{children}</div> }));
-vi.mock('./AssetComposer', () => ({ AssetComposer: ({ draft, onReference }: { draft: AssetDraft; onReference: () => void }) => <><input aria-label="Creation draft" data-reference-count={draft.references.length} /><button onClick={onReference}>References</button></> }));
+let lastComposerOnCreated: ((job: import('../../../shared/gateway').GenerationJob) => void) | undefined;
+let lastShowCurrentJob: boolean | undefined;
+let lastComposerOnUploadFiles: ((files: File[]) => void) | undefined;
+let lastComposerUploadingReferences: boolean | undefined;
+vi.mock('./AssetComposer', () => ({ AssetComposer: ({ draft, onReference, onUploadFiles, uploadingReferences, onCreated, showCurrentJob }: { draft: AssetDraft; onReference: () => void; onUploadFiles?: (files: File[]) => void; uploadingReferences?: boolean; onCreated: (job: import('../../../shared/gateway').GenerationJob) => void; showCurrentJob?: boolean }) => { lastComposerOnCreated = onCreated; lastShowCurrentJob = showCurrentJob; lastComposerOnUploadFiles = onUploadFiles; lastComposerUploadingReferences = uploadingReferences; return <><input aria-label="Creation draft" data-reference-count={draft.references.length} /><button onClick={onReference}>References</button></>; } }));
 vi.mock('./AssetTaskHistory', () => ({ AssetTaskMenu: () => null }));
 vi.mock('./assetClient', () => ({ assetRequest: vi.fn(), uploadLibraryAsset: vi.fn() }));
 vi.mock('./gatewayClient', () => ({ gatewayRequest: async () => ({ conversations: [] }) }));
+vi.mock('./game/gameCatalog', async importOriginal => {
+  const actual = await importOriginal<typeof import('./game/gameCatalog')>();
+  return { ...actual, gameApi: { ...actual.gameApi, catalog: vi.fn(async () => ({ games: [] })) } };
+});
+
+function game(id: string, changes: Partial<GameCard> = {}): GameCard {
+  return { id, title: `Game ${id}`, description: '', genre: 'shooter', style: null, setting: null, multiplayer: false, maxPlayers: 1, status: 'published', cover: null, playUrl: `/api/games/${id}/play/index.html`,
+    plays: 0, likes: 0, dislikes: 0, reaction: 0, favorite: false, source: 'mine', remixOf: null, controls: '', createdAt: '2026-11-20T00:00:00.000Z', updatedAt: '2026-11-20T00:00:00.000Z', ...changes };
+}
 
 function fixture(id: string): LibraryAsset {
   return { id, name: `Picture ${id}`, modality: 'image', createdAt: 1, updatedAt: 1, currentVersionId: `${id}-v1`, versions: [{ id: `${id}-v1`, createdAt: 1, source: 'upload', filename: `${id}.png`, mimeType: 'image/png', bytes: 1024, sha256: id, references: [] }] };
@@ -54,6 +69,7 @@ beforeEach(() => {
     }
     throw new Error(`Unexpected action ${args.action}`);
   });
+  vi.mocked(gameApi.catalog).mockResolvedValue({ games: [] });
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
@@ -530,7 +546,7 @@ it('hands the selected still version to the Cinema first-frame draft', async () 
   asset.versions.push({ ...asset.versions[0], id: 'A-v2' });
   asset.currentVersionId = 'A-v2';
   const useAsFirstFrame = vi.fn();
-  const studio = { destination: studioDestination(findMediaStudio('cinema')!, 'shot-image'),
+  const studio = { destination: studioDestination(findMediaStudio('design')!, 'text-to-image'),
     catalog: { catalog: undefined, failed: false, retry: vi.fn() }, remember: vi.fn(), chooseModel: vi.fn(), useAsFirstFrame };
   await act(async () => root.render(<AssetsPage active studio={studio} />));
   await flush();
@@ -557,7 +573,7 @@ it('prepares a first-frame draft from a guide and an uploaded image without subm
   await click('Play');
   expect(fetchPreview).toHaveBeenCalledWith(skillPreviewSnapshot + 'light-shadow-product.mp4', expect.anything());
   expect(container.querySelector('.om-scene-example-media video')?.getAttribute('src')).toMatch(/^blob:/);
-  await click('Use prompt');
+  await click('Use this example');
   expect(remember.mock.lastCall?.[0].prompt).toMatch(/supplied frame/);
   const file = new File(['data'], 'still.png', { type: 'image/png' });
   const imported = fixture('new-still');
@@ -605,6 +621,31 @@ it('starts a focused image landing on its examples even when the user already ha
   await act(async () => library.click());
   expect(container.querySelector('.om-canvas-deck')).toBeNull();
   expect(container.querySelector('.om-assets-main')!.textContent).toContain(records.get('A')!.name);
+});
+
+it.each([
+  {
+    scene: 'remove-background', image: 'sofa-cutout.webp', title: 'Remove the background in one click',
+    description: /Keep the sofa and coffee table/,
+  },
+  {
+    scene: 'relight', image: 'sofa-relight.webp', title: 'Relight with flexible lighting controls',
+    description: /Adjust light direction, color temperature, and mood/,
+  },
+] as const)('shows only a comparison image and its caption in the $scene guide', async ({ scene, image, title, description }) => {
+  const { mediaEditorDestination } = await import('./creativeStudios');
+  const studio = { destination: mediaEditorDestination(scene),
+    catalog: { catalog: undefined, failed: false, retry: vi.fn() }, remember: vi.fn(), chooseModel: vi.fn() };
+  await act(async () => root.render(<AssetsPage active studio={studio} />)); await flush();
+
+  const guide = container.querySelector('.om-scene-comparison')!;
+  expect(guide.querySelectorAll('img')).toHaveLength(1);
+  expect(guide.querySelector('img')?.getAttribute('src')).toContain(image);
+  expect(guide.querySelector('h2')?.textContent).toBe(title);
+  expect(guide.querySelector('p')?.textContent).toMatch(description);
+  expect(guide.querySelector('video, button, ol')).toBeNull();
+  await click('Generations');
+  expect(container.querySelector('.om-scene-comparison')).toBeNull();
 });
 
 it('hides Use as reference for video and audio assets, omits video from edit references, and limits direct reference picker to images', async () => {
@@ -656,4 +697,571 @@ it('hides Use as reference on video assets, edits video without self-reference, 
   const dialog = document.querySelector('[role=dialog]')!;
   expect(dialog).not.toBeNull();
   expect([...dialog.querySelectorAll('button')].some(node => node.textContent === 'Videos' || node.textContent === 'Audio')).toBe(false);
+});
+
+it('switches to Asset library on generate and shows blurred placeholder tiles at the front of the grid without duplicating composer progress', async () => {
+  records.clear();
+  const { sceneDestination, studioScenes } = await import('./creativeStudios');
+  const studio = {
+    destination: sceneDestination(studioScenes.find(scene => scene.id === 'text-to-image')!),
+    catalog: { catalog: undefined, failed: false, retry: vi.fn() },
+    remember: vi.fn(),
+    chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={studio} />)); await flush();
+  expect(container.querySelector('.om-canvas-deck')).not.toBeNull();
+  const makeJob = (id: string, prompt: string, createdAt: number, hasRef = false): import('../../../shared/gateway').GenerationJob => ({
+    id, requestId: `req-${id}`, modality: 'image', prompt, state: 'running',
+    model: { id: 'gpt-image-2', label: 'GPT Image 2', provider: 'opendesign' },
+    ...(hasRef ? { library: { references: [{ assetId: 'ref-1', versionId: 'ref-v1' }] } } : {}),
+    createdAt, updatedAt: createdAt,
+  });
+  await act(async () => {
+    lastComposerOnCreated?.(makeJob('job-1', 'Amber bottle in warm sunlight', 100));
+    lastComposerOnCreated?.(makeJob('job-2', 'Refined glass lighting pass', 200, true));
+  });
+  await flush();
+  // Auto-switched to Asset library tab with live running badge and suppressed duplicate left-pane card.
+  expect(container.querySelector('.om-canvas-deck')).toBeNull();
+  expect(lastShowCurrentJob).toBe(false);
+  const libraryTab = container.querySelectorAll<HTMLButtonElement>('.om-assets-heading .om-choice-tabs button')[1];
+  expect(libraryTab.getAttribute('aria-pressed')).toBe('true');
+  expect(libraryTab.querySelector('.om-tab-count')?.textContent).toBe('2');
+  const tiles = [...container.querySelectorAll('.om-gen-flow .om-gen-card-pending')];
+  expect(tiles).toHaveLength(2);
+  // Newest active job appears first, with blurred reference backdrop when a reference exists.
+  expect(tiles[0].querySelector('img.om-placeholder-backdrop')).not.toBeNull();
+  expect(tiles[1].querySelector('.om-placeholder-aura')).not.toBeNull();
+});
+
+it('transitions completed placeholders in place without duplicating assets and lets users reuse or dismiss failed placeholders', async () => {
+  const { sceneDestination, studioScenes } = await import('./creativeStudios');
+  const studio = {
+    destination: sceneDestination(studioScenes.find(scene => scene.id === 'text-to-image')!),
+    catalog: { catalog: undefined, failed: false, retry: vi.fn() },
+    remember: vi.fn(),
+    chooseModel: vi.fn(),
+  };
+  let polledJobs: import('../../../shared/gateway').GenerationJob[] = [];
+  const baseImpl = vi.mocked(assetRequest).getMockImplementation()!;
+  vi.mocked(assetRequest).mockImplementation(async args => {
+    if (args.action === 'jobs') return { jobs: structuredClone(polledJobs) };
+    return baseImpl(args);
+  });
+  await act(async () => root.render(<AssetsPage active studio={studio} />)); await flush();
+  // Submitting a new version of existing asset A starts as running, then transitions to completed with A-v2.
+  const jobRunning: import('../../../shared/gateway').GenerationJob = {
+    id: 'job-v2', requestId: 'req-v2', modality: 'image', prompt: 'Upgrade asset A lighting', state: 'running',
+    model: { id: 'gpt-image-2', label: 'GPT Image 2', provider: 'opendesign' },
+    createdAt: 300, updatedAt: 300,
+  };
+  const jobFailed: import('../../../shared/gateway').GenerationJob = {
+    id: 'job-fail', requestId: 'req-fail', modality: 'image', prompt: 'Neon alley rain scene', state: 'failed',
+    error: 'Provider timeout',
+    model: { id: 'gpt-image-2', label: 'GPT Image 2', provider: 'opendesign' },
+    createdAt: 250, updatedAt: 250,
+  };
+  polledJobs = [jobRunning, jobFailed];
+  await act(async () => {
+    lastComposerOnCreated?.(jobRunning);
+    lastComposerOnCreated?.(jobFailed);
+  });
+  await flush();
+  expect(container.querySelectorAll('.om-placeholder-stage')).toHaveLength(2);
+  // Once job-v2 finishes with version A-v2 and the library refreshes, it unblurs in place and deduplicates A from the rest of the stream.
+  records.get('A')!.versions.push({ ...records.get('A')!.versions[0], id: 'A-v2', parentVersionId: 'A-v1' });
+  records.get('A')!.currentVersionId = 'A-v2';
+  polledJobs = [{ ...jobRunning, state: 'completed', libraryAssets: [{ assetId: 'A', versionId: 'A-v2' }], updatedAt: 301 }, jobFailed];
+  await act(async () => { vi.advanceTimersByTime(2600); }); await flush();
+  await act(async () => { vi.advanceTimersByTime(10); }); await flush();
+  expect(container.querySelectorAll('.om-placeholder-stage')).toHaveLength(1);
+  expect(container.querySelectorAll('[aria-label="Picture A"]')).toHaveLength(1);
+  // Reuse prompt refills the left composer draft; Dismiss removes the failed placeholder tile.
+  await act(async () => { button('Reuse prompt')!.click(); }); await flush();
+  expect(studio.remember.mock.lastCall?.[0].prompt).toBe('Neon alley rain scene');
+  await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Dismiss"]')!.click(); }); await flush();
+  expect(container.querySelectorAll('.om-placeholder-stage')).toHaveLength(0);
+});
+
+it('renders justified equal-height Generations flows for both Image and Video with human model names and unclipped Cinema Lightbox', async () => {
+  const { sceneDestination, studioScenes } = await import('./creativeStudios');
+  const imageStudio = {
+    destination: sceneDestination(studioScenes.find(scene => scene.id === 'text-to-image')!),
+    catalog: { catalog: undefined, failed: false, retry: vi.fn() },
+    remember: vi.fn(),
+    chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={imageStudio} />)); await flush();
+  const generationsTab = container.querySelectorAll<HTMLButtonElement>('.om-assets-heading .om-choice-tabs button')[1];
+  expect(generationsTab.textContent).toBe('Generations');
+  // Generations belongs to generated outputs only — Upload stays in the top-right global Asset Library.
+  expect(button('Upload')).toBeUndefined();
+  await act(async () => generationsTab.click()); await flush();
+  const history = container.querySelector('.om-gen-history')!;
+  expect(history.getAttribute('data-density')).toBe('comfortable');
+  await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Large preview"]')!.click(); });
+  expect(history.getAttribute('data-density')).toBe('large');
+  // Clicking an image card opens the zoomable lightbox right inside the Image tab.
+  await act(async () => { container.querySelector<HTMLButtonElement>('.om-gen-open')!.click(); });
+  const lightbox = container.querySelector('[role="dialog"].om-gen-lightbox')!;
+  expect(lightbox).not.toBeNull();
+  expect(lightbox.textContent).toContain('Zoom 100%');
+  await act(async () => { lightbox.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click(); });
+  expect(container.querySelector('.om-gen-lightbox')).toBeNull();
+
+  // Video tab renders justified equal-height cards with human model labels, ratio/duration/resolution tags, and Cinema Lightbox.
+  const clipA = fixture('vid-1');
+  clipA.name = 'Portrait dance';
+  clipA.modality = 'video';
+  Object.assign(clipA.versions[0], {
+    filename: 'shot1.mp4', mimeType: 'video/mp4', duration: 5.1, width: 720, height: 1280,
+    model: 'account:doubao-seedance-2-5-260628', prompt: 'Slow dolly across studio table',
+  });
+  const clipB = fixture('vid-2');
+  clipB.name = 'Closing shot';
+  clipB.modality = 'video';
+  Object.assign(clipB.versions[0], {
+    filename: 'shot2.mp4', mimeType: 'video/mp4', duration: 4, width: 1920, height: 1080,
+    model: 'opendesign:wan-2.7', prompt: 'Wide pull-back at dusk',
+  });
+  records.set(clipA.id, clipA);
+  records.set(clipB.id, clipB);
+  const videoStudio = {
+    destination: sceneDestination(studioScenes.find(scene => scene.id === 'text-to-video')!),
+    catalog: { catalog: undefined, failed: false, retry: vi.fn() },
+    remember: vi.fn(),
+    chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage key="video" active studio={videoStudio} />)); await flush();
+  const videoTab = container.querySelectorAll<HTMLButtonElement>('.om-assets-heading .om-choice-tabs button')[1];
+  expect(videoTab.textContent).toBe('Generations');
+  await act(async () => videoTab.click()); await flush();
+  const videoCards = [...container.querySelectorAll<HTMLElement>('.om-gen-flow .om-gen-card')];
+  expect(videoCards).toHaveLength(2);
+  expect(videoCards[0].style.getPropertyValue('--ar')).toBe(String(720 / 1280));
+  expect(videoCards[0].textContent).toContain('Seedance 2.5');
+  expect(videoCards[0].textContent).toContain('9:16');
+  expect(videoCards[0].textContent).toContain('5s');
+  expect(videoCards[0].textContent).toContain('720p');
+  expect(videoCards[0].textContent).not.toContain('account:doubao-seedance-2-5-260628');
+  // Clicking the vertical video opens the Cinema Lightbox with controls intact.
+  await act(async () => { videoCards[0].querySelector<HTMLButtonElement>('.om-gen-open')!.click(); });
+  const videoLightbox = container.querySelector('[role="dialog"].om-gen-lightbox')!;
+  expect(videoLightbox).not.toBeNull();
+  expect(videoLightbox.querySelector('video.om-gen-lightbox-video')).not.toBeNull();
+  expect(videoLightbox.textContent).toContain('Slow dolly across studio table');
+});
+
+it('shows games made in Game Studio above the library and in their own category', async () => {
+  vi.mocked(gameApi.catalog).mockResolvedValue({ games: [
+    game('draft', { status: 'draft', title: 'Pixel art style, Shooter, Cyberpunk setting', style: 'pixel', setting: 'cyberpunk' }),
+    game('bundled', { source: 'template', title: 'Bundled game' }),
+    game('done', { title: 'Station Defense', updatedAt: '2026-11-19T00:00:00.000Z' }),
+  ] });
+  window.history.replaceState(null, '', '/?page=assets');
+  // Four 200px columns fit; the row shows one line only.
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(900);
+  await render();
+  const section = container.querySelector('.om-asset-games')!;
+  expect(section.querySelector('h2')?.textContent).toBe('Games');
+  // Only the user's own games, newest first; a composed draft brief is shown as its chosen options.
+  expect([...section.querySelectorAll('.om-asset-tile strong')].map(node => node.textContent)).toEqual(['Cyberpunk · Pixel art · Shooter', 'Station Defense']);
+  expect([...section.querySelectorAll('.om-asset-game-status')].map(node => node.textContent)).toEqual(['Waiting for your Agent', 'Published']);
+  expect(container.textContent).toContain('Picture A');
+
+  await click('View all');
+  expect(container.querySelector('.om-asset-games')).toBeNull();
+  expect(button('Games').getAttribute('aria-current')).toBe('page');
+  expect(button('All').getAttribute('aria-current')).toBeNull();
+  expect(container.textContent).not.toContain('Picture A');
+  expect(container.querySelectorAll('.om-asset-tile')).toHaveLength(2);
+
+  await click('Open Station Defense in Game Studio');
+  expect(new URL(location.href).pathname).toBe('/studios/game');
+  expect(new URL(location.href).searchParams.get('game')).toBe('done');
+});
+
+it('hides the games row without games and offers Game Studio from the empty category', async () => {
+  window.history.replaceState(null, '', '/?page=assets');
+  await render();
+  expect(container.querySelector('.om-asset-games')).toBeNull();
+  await click('Games');
+  expect(container.textContent).toContain('No games yet');
+  await click('Go to Game Studio');
+  const url = new URL(location.href);
+  expect(url.pathname).toBe('/studios/game');
+  expect(url.searchParams.has('game')).toBe(false);
+});
+
+it('keeps the empty studio canvas model aligned with composer selection on Codex-only text-to-image and multi-ref drafts', async () => {
+  const { sceneDestination, studioScenes } = await import('./creativeStudios');
+  const { creationModels } = await import('./creationModels');
+  records.clear();
+  const codex = { id: 'codex:image-generation', provider: 'codex', modelId: 'image-generation', label: 'Codex Image', modality: 'image' as const, mode: 'text-to-image', source: 'builtin' as const, supportsImageReference: true, maxInputImages: 1 };
+  const textToImageStudio = {
+    destination: sceneDestination(studioScenes.find(scene => scene.id === 'text-to-image')!),
+    catalog: {
+      catalog: { models: [codex], status: { routes: {}, providers: [{ id: 'codex', label: 'Codex', available: true }] } },
+      failed: false, retry: vi.fn(),
+    },
+    remember: vi.fn(), chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={textToImageStudio} />)); await flush();
+  await act(async () => container.querySelectorAll<HTMLButtonElement>('.om-assets-heading .om-choice-tabs button')[1].click());
+  expect(container.textContent).toContain('Codex Image');
+
+  const sunburst = { id: 'opendesign:gpt-image-2.6-sunburst', provider: 'opendesign', modelId: 'gpt-image-2.6-sunburst', label: 'gpt-image-2.6-sunburst', modality: 'image' as const, mode: 'text-to-image', source: 'live' as const, supportsImageReference: true, maxInputImages: 16 };
+  const seedream = { id: 'opendesign:seedream-5.5', provider: 'opendesign', modelId: 'seedream-5.5', label: 'seedream-5.5', modality: 'image' as const, mode: 'text-to-image', source: 'live' as const, supportsImageReference: true, maxInputImages: 1 };
+  const multiRefResult = creationModels(
+    { models: [seedream, sunburst], status: { routes: {}, providers: [{ id: 'opendesign', label: 'OpenDesign Cloud', available: true }] } } as never,
+    'image',
+    seedream.id,
+    studioScenes.find(scene => scene.id === 'character')!,
+    false,
+    2,
+  );
+  expect(multiRefResult.selected?.id).toBe(sunburst.id);
+  expect(multiRefResult.available.map(model => model.id)).toEqual([sunburst.id]);
+  expect(multiRefResult.compatible.some(model => model.modelId === 'seedream-5.5')).toBe(false);
+});
+
+it('supports multi-file reference upload up to 5 images on Character reference while keeping single-file upload on Remove background', async () => {
+  const { mediaEditorDestination } = await import('./creativeStudios');
+  const sunburst = { id: 'opendesign:gpt-image-2.6-sunburst', provider: 'opendesign', modelId: 'gpt-image-2.6-sunburst', label: 'gpt-image-2.6-sunburst', modality: 'image' as const, mode: 'text-to-image', source: 'live' as const, supportsImageReference: true, maxInputImages: 16 };
+  const seedream = { id: 'opendesign:seedream-5.5', provider: 'opendesign', modelId: 'seedream-5.5', label: 'seedream-5.5', modality: 'image' as const, mode: 'text-to-image', source: 'live' as const, supportsImageReference: true, maxInputImages: 1 };
+  const catalog = {
+    models: [seedream, sunburst],
+    status: { routes: {}, providers: [{ id: 'opendesign', label: 'OpenDesign Cloud', available: true }] },
+  };
+  const remember = vi.fn();
+  const characterStudio = {
+    destination: mediaEditorDestination('character'),
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember, chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={characterStudio} />)); await flush();
+
+  const refInput = container.querySelector<HTMLInputElement>('input[data-reference-upload="true"]')!;
+  expect(refInput.multiple).toBe(true);
+
+  const imported = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'].map(id => fixture(id));
+  vi.mocked(uploadLibraryAsset).mockClear();
+  for (const item of imported.slice(0, 5)) vi.mocked(uploadLibraryAsset).mockResolvedValueOnce(item);
+  const files = imported.map(item => new File(['data'], `${item.id}.png`, { type: 'image/png' }));
+  Object.defineProperty(refInput, 'files', { configurable: true, value: files });
+  await act(async () => refInput.dispatchEvent(new Event('change', { bubbles: true }))); await flush();
+
+  // Caps imported references at the Character reference limit (5) without uploading the excess 6th file.
+  expect(uploadLibraryAsset).toHaveBeenCalledTimes(5);
+  expect(remember.mock.lastCall?.[0].references).toHaveLength(5);
+  expect(remember.mock.lastCall?.[0].references.map((item: { reference: { assetId: string } }) => item.reference.assetId)).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
+  expect(container.querySelector('.om-source-actions')).toBeNull();
+  expect(document.body.textContent).toContain('Reference limit reached.');
+
+  // Nearly-full case (4 of 5 attached) with mixed non-image + 2 images: keeps 1 image and shows both notices.
+  await act(async () => root.unmount()); root = createRoot(container);
+  const rememberPartial = vi.fn();
+  const fourRefs = ['c1', 'c2', 'c3', 'c4'].map(id => ({ reference: { assetId: id, versionId: `${id}-v1` }, name: `Picture ${id}` }));
+  const partialStudio = {
+    destination: mediaEditorDestination('character'),
+    initialDraft: { modality: 'image' as const, prompt: '', references: fourRefs },
+    draftKey: 'character:partial',
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember: rememberPartial, chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={partialStudio} />)); await flush();
+  const partialInput = container.querySelector<HTMLInputElement>('input[data-reference-upload="true"]')!;
+  const extraFive = fixture('c5');
+  vi.mocked(uploadLibraryAsset).mockResolvedValueOnce(extraFive);
+  Object.defineProperty(partialInput, 'files', {
+    configurable: true,
+    value: [
+      new File(['bad'], 'notes.txt', { type: 'text/plain' }),
+      new File(['data'], 'c5.png', { type: 'image/png' }),
+      new File(['data'], 'c6.png', { type: 'image/png' }),
+    ],
+  });
+  await act(async () => partialInput.dispatchEvent(new Event('change', { bubbles: true }))); await flush();
+  expect(rememberPartial.mock.lastCall?.[0].references.map((item: { reference: { assetId: string } }) => item.reference.assetId)).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
+  expect(document.body.textContent).toContain('Choose an image file.');
+  expect(document.body.textContent).toContain('Reference limit reached.');
+
+  await act(async () => root.unmount()); root = createRoot(container);
+  const removeBgStudio = {
+    destination: mediaEditorDestination('remove-background'),
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember: vi.fn(), chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={removeBgStudio} />)); await flush();
+  const singleRefInput = container.querySelector<HTMLInputElement>('input[data-reference-upload="true"]')!;
+  expect(singleRefInput.multiple).toBe(false);
+});
+
+it('shows Reference limit reached when another reference fills the last slot while an upload is in flight', async () => {
+  const { mediaEditorDestination } = await import('./creativeStudios');
+  const sunburst = { id: 'opendesign:gpt-image-2.6-sunburst', provider: 'opendesign', modelId: 'gpt-image-2.6-sunburst', label: 'gpt-image-2.6-sunburst', modality: 'image' as const, mode: 'text-to-image', source: 'live' as const, supportsImageReference: true, maxInputImages: 16 };
+  const catalog = {
+    models: [sunburst],
+    status: { routes: {}, providers: [{ id: 'opendesign', label: 'OpenDesign Cloud', available: true }] },
+  };
+  const fourRefs = ['c1', 'c2', 'c3', 'c4'].map(id => ({ reference: { assetId: id, versionId: `${id}-v1` }, name: `Picture ${id}` }));
+  const remember = vi.fn();
+  const studio = {
+    destination: mediaEditorDestination('character'),
+    initialDraft: { modality: 'image' as const, prompt: '', references: fourRefs },
+    draftKey: 'character:race',
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember, chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={studio} />)); await flush();
+
+  const inflight = deferred<LibraryAsset>();
+  vi.mocked(uploadLibraryAsset).mockReturnValueOnce(inflight.promise);
+  const refInput = container.querySelector<HTMLInputElement>('input[data-reference-upload="true"]')!;
+  Object.defineProperty(refInput, 'files', { configurable: true, value: [new File(['data'], 'late.png', { type: 'image/png' })] });
+  await act(async () => refInput.dispatchEvent(new Event('change', { bubbles: true })));
+
+  // Fill the 5th slot via the reference picker while the upload is still in flight.
+  await click('References'); await flush();
+  const pickBtn = document.querySelector<HTMLButtonElement>('[role=dialog] [aria-label="Picture A"]')!;
+  await act(async () => pickBtn.click()); await flush();
+  await click('Use selected version');
+  expect(remember.mock.lastCall?.[0].references).toHaveLength(5);
+
+  // Resolve the in-flight upload; it should not exceed 5 and must surface Reference limit reached.
+  await act(async () => { inflight.resolve(fixture('late-upload')); await inflight.promise; }); await flush();
+  expect(remember.mock.lastCall?.[0].references).toHaveLength(5);
+  expect(remember.mock.lastCall?.[0].references.some((item: { reference: { assetId: string } }) => item.reference.assetId === 'late-upload')).toBe(false);
+  expect(document.body.textContent).toContain('Reference limit reached.');
+});
+
+it('supports multi-select in AssetPicker capped to remaining reference slots and rejects uncompressible >2 MiB drops early', async () => {
+  const { mediaEditorDestination } = await import('./creativeStudios');
+  const sunburst = { id: 'opendesign:gpt-image-2.6-sunburst', provider: 'opendesign', modelId: 'gpt-image-2.6-sunburst', label: 'gpt-image-2.6-sunburst', modality: 'image' as const, mode: 'text-to-image', source: 'live' as const, supportsImageReference: true, maxInputImages: 16 };
+  const catalog = {
+    models: [sunburst],
+    status: { routes: {}, providers: [{ id: 'opendesign', label: 'OpenDesign Cloud', available: true }] },
+  };
+  records.set('C', fixture('C'));
+  const remember = vi.fn();
+  const threeRefs = ['r1', 'r2', 'r3'].map(id => ({ reference: { assetId: id, versionId: `${id}-v1` }, name: `Picture ${id}` }));
+  const studio = {
+    destination: mediaEditorDestination('character'),
+    initialDraft: { modality: 'image' as const, prompt: '', references: threeRefs },
+    draftKey: 'character:multipick',
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember, chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={studio} />)); await flush();
+
+  // 3 of 5 slots used -> picker opens in multi-select mode with maxSelect = 2 and hides Import all.
+  await click('References'); await flush();
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(dialog.textContent).toContain('Select up to 2 images.');
+  expect([...dialog.querySelectorAll('button')].some(b => b.textContent?.includes('Import all'))).toBe(false);
+
+  await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Picture A"]')!.click());
+  await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Picture B"]')!.click());
+  expect(dialog.textContent).toContain('2 / 2 selected');
+
+  // Clicking a 3rd item is blocked by maxSelect = 2 and shows Reference limit reached.
+  await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Picture C"]')!.click());
+  expect(dialog.textContent).toContain('2 / 2 selected');
+  expect(dialog.textContent).toContain('Reference limit reached.');
+
+  await click('Use selected (2)');
+  expect(remember.mock.lastCall?.[0].references.map((item: { reference: { assetId: string } }) => item.reference.assetId)).toEqual(['r1', 'r2', 'r3', 'A', 'B']);
+
+  // Dropping an uncompressible > 2 MiB image on a fresh Character reference draft surfaces the 2 MiB error early without calling uploadLibraryAsset.
+  await act(async () => root.unmount()); root = createRoot(container);
+  vi.mocked(uploadLibraryAsset).mockClear();
+  vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('cannot decode'); }));
+  vi.stubGlobal('Image', undefined);
+  const freshStudio = {
+    destination: mediaEditorDestination('character'),
+    draftKey: 'character:oversized',
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember: vi.fn(), chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={freshStudio} />)); await flush();
+  const huge = new File([new Uint8Array(2 * 1024 * 1024 + 512)], 'huge.png', { type: 'image/png' });
+  await act(async () => { lastComposerOnUploadFiles?.([huge]); }); await flush();
+  expect(uploadLibraryAsset).not.toHaveBeenCalled();
+  expect(lastComposerUploadingReferences).toBe(false);
+  expect(document.body.textContent).toContain('The reference image is larger than the 2 MiB OpenDesign upload limit.');
+
+  // Sub-2 MiB undecodable HEIC is rejected early without consuming slots from a following valid PNG.
+  const validPng = new File(['ok'], 'valid.png', { type: 'image/png' });
+  const heic = new File([new Uint8Array(1024)], 'iphone.heic', { type: 'image/heic' });
+  vi.mocked(uploadLibraryAsset).mockResolvedValueOnce(fixture('valid-after-heic'));
+  await act(async () => { lastComposerOnUploadFiles?.([heic, validPng]); }); await flush();
+  expect(uploadLibraryAsset).toHaveBeenCalledTimes(1);
+  expect(document.body.textContent).toContain('OpenDesign does not accept this reference image format.');
+});
+
+it('keeps AssetPicker multi-select stable across in-flight uploads, ignores already-attached assets for quota, validates picked size, and stops batch on unmount', async () => {
+  const { mediaEditorDestination } = await import('./creativeStudios');
+  const sunburst = { id: 'opendesign:gpt-image-2.6-sunburst', provider: 'opendesign', modelId: 'gpt-image-2.6-sunburst', label: 'gpt-image-2.6-sunburst', modality: 'image' as const, mode: 'text-to-image', source: 'live' as const, supportsImageReference: true, maxInputImages: 16 };
+  const catalog = {
+    models: [sunburst],
+    status: { routes: {}, providers: [{ id: 'opendesign', label: 'OpenDesign Cloud', available: true }] },
+  };
+  records.set('C', fixture('C'));
+  const bigLibraryAsset = fixture('BIG');
+  bigLibraryAsset.versions[0].bytes = 3 * 1024 * 1024;
+  records.set('BIG', bigLibraryAsset);
+  const remember = vi.fn();
+  // Asset A is already attached (plus 2 more -> 3 / 5 attached, 2 remaining).
+  const initialRefs = [
+    { reference: { assetId: 'A', versionId: 'A-v1' }, name: 'Picture A' },
+    { reference: { assetId: 'r2', versionId: 'r2-v1' }, name: 'Picture r2' },
+    { reference: { assetId: 'r3', versionId: 'r3-v1' }, name: 'Picture r3' },
+  ];
+  const studio = {
+    destination: mediaEditorDestination('character'),
+    initialDraft: { modality: 'image' as const, prompt: '', references: initialRefs },
+    draftKey: 'character:picker-stability',
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember, chooseModel: vi.fn(),
+  };
+  await act(async () => root.render(<AssetsPage active studio={studio} />)); await flush();
+
+  // Start an in-flight upload (1 file), then open the picker while 2 slots remain.
+  const inflight = deferred<LibraryAsset>();
+  vi.mocked(uploadLibraryAsset).mockReturnValueOnce(inflight.promise);
+  await act(async () => { lastComposerOnUploadFiles?.([new File(['data'], 'u1.png', { type: 'image/png' })]); });
+
+  await click('References'); await flush();
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  // Already-attached Asset A shows Already attached and does not consume a slot.
+  expect(dialog.textContent).toContain('Already attached');
+  await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Picture A"]')!.click());
+  expect(dialog.textContent).not.toContain('1 / 2 selected');
+
+  // Select Picture B while upload is in flight, then complete the upload (draft moves 3 -> 4, remaining 2 -> 1).
+  await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Picture B"]')!.click());
+  expect(dialog.textContent).toContain('1 / 2 selected');
+  await act(async () => { inflight.resolve(fixture('uploaded-4')); await inflight.promise; }); await flush();
+  // Picker stays in multi-select mode with Picture B still selected (1 / 1 selected) and confirm button intact!
+  expect(dialog.textContent).toContain('1 / 1 selected');
+  expect(dialog.textContent).toContain('Use selected (1)');
+  await click('Use selected (1)');
+  expect(remember.mock.lastCall?.[0].references).toHaveLength(5);
+
+  // Oversized 3 MiB library asset is rejected immediately at pick time.
+  await act(async () => root.unmount()); root = createRoot(container);
+  const rememberBig = vi.fn();
+  await act(async () => root.render(<AssetsPage active studio={{
+    destination: mediaEditorDestination('character'),
+    draftKey: 'character:big-pick',
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember: rememberBig, chooseModel: vi.fn(),
+  }} />)); await flush();
+  await click('References'); await flush();
+  const bigDialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  await act(async () => bigDialog.querySelector<HTMLButtonElement>('[aria-label="Picture BIG"]')!.click());
+  await click('Use selected (1)');
+  expect(document.body.textContent).toContain('The reference image is larger than the 2 MiB OpenDesign upload limit.');
+  expect(rememberBig.mock.lastCall?.[0].references ?? []).toHaveLength(0);
+
+  // Unmounting mid-batch stops subsequent uploads in the batch.
+  vi.mocked(uploadLibraryAsset).mockClear();
+  const firstUpload = deferred<LibraryAsset>();
+  vi.mocked(uploadLibraryAsset).mockReturnValueOnce(firstUpload.promise);
+  await act(async () => {
+    lastComposerOnUploadFiles?.([
+      new File(['1'], 'one.png', { type: 'image/png' }),
+      new File(['2'], 'two.png', { type: 'image/png' }),
+    ]);
+  });
+  await act(async () => root.unmount());
+  await act(async () => { firstUpload.resolve(fixture('one')); await firstUpload.promise; });
+  expect(uploadLibraryAsset).toHaveBeenCalledTimes(1);
+  root = createRoot(container);
+
+  // A backend-rejected file (e.g. empty PNG) does not consume the remaining slot from a following valid PNG.
+  const fourRefs = ['r1', 'r2', 'r3', 'r4'].map(id => ({ reference: { assetId: id, versionId: `${id}-v1` }, name: `Picture ${id}` }));
+  const rememberFallback = vi.fn();
+  await act(async () => root.render(<AssetsPage active studio={{
+    destination: mediaEditorDestination('character'),
+    initialDraft: { modality: 'image' as const, prompt: '', references: fourRefs },
+    draftKey: 'character:rejected-first',
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember: rememberFallback, chooseModel: vi.fn(),
+  }} />)); await flush();
+  vi.mocked(uploadLibraryAsset).mockClear();
+  vi.mocked(uploadLibraryAsset)
+    .mockRejectedValueOnce(new AssetUploadError('rejected', 'empty'))
+    .mockResolvedValueOnce(fixture('valid-5th'));
+  await act(async () => {
+    lastComposerOnUploadFiles?.([
+      new File([], 'empty.png', { type: 'image/png' }),
+      new File(['ok'], 'valid.png', { type: 'image/png' }),
+    ]);
+  }); await flush();
+  expect(uploadLibraryAsset).toHaveBeenCalledTimes(2);
+  expect(rememberFallback.mock.lastCall?.[0].references).toHaveLength(5);
+  expect(rememberFallback.mock.lastCall?.[0].references[4].reference.assetId).toBe('valid-5th');
+
+  // Codex-only edit-image does NOT enforce OpenDesign's 2 MiB limit on a valid 3 MiB PNG library asset.
+  await act(async () => root.unmount()); root = createRoot(container);
+  const codexOnlyCatalog = {
+    models: [
+      { id: 'codex:image-generation', provider: 'codex', modelId: 'image-generation', label: 'Codex Image', modality: 'image' as const, mode: 'text-to-image', source: 'builtin' as const, supportsImageReference: true, maxInputImages: 1 },
+      { ...sunburst },
+    ],
+    status: {
+      routes: {},
+      providers: [
+        { id: 'codex', label: 'Codex', available: true },
+        { id: 'opendesign', label: 'OpenDesign Cloud', available: false },
+      ],
+    },
+  };
+  const rememberCodex = vi.fn();
+  await act(async () => root.render(<AssetsPage active studio={{
+    destination: mediaEditorDestination('image-edit'),
+    draftKey: 'image-edit:codex-only',
+    catalog: { catalog: codexOnlyCatalog, failed: false, retry: vi.fn() },
+    remember: rememberCodex, chooseModel: vi.fn(),
+  }} />)); await flush();
+  await click('References'); await flush();
+  const codexDialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  await act(async () => codexDialog.querySelector<HTMLButtonElement>('[aria-label="Picture BIG"]')!.click());
+  await click('Use selected version');
+  expect(rememberCodex.mock.lastCall?.[0].references.map((item: { reference: { assetId: string } }) => item.reference.assetId)).toEqual(['BIG']);
+});
+
+it('rejects oversized generated assets when attaching from the Generations lightbox', async () => {
+  const { mediaEditorDestination } = await import('./creativeStudios');
+  const sunburst = { id: 'opendesign:gpt-image-2.6-sunburst', provider: 'opendesign', modelId: 'gpt-image-2.6-sunburst', label: 'gpt-image-2.6-sunburst', modality: 'image' as const, mode: 'text-to-image', source: 'live' as const, supportsImageReference: true, maxInputImages: 16 };
+  const catalog = {
+    models: [sunburst],
+    status: { routes: {}, providers: [{ id: 'opendesign', label: 'OpenDesign Cloud', available: true }] },
+  };
+  records.clear();
+  const generatedBig = fixture('GENBIG');
+  generatedBig.versions[0].source = 'generation';
+  generatedBig.versions[0].bytes = 3 * 1024 * 1024;
+  records.set('GENBIG', generatedBig);
+  const rememberGen = vi.fn();
+  await act(async () => root.render(<AssetsPage active studio={{
+    destination: mediaEditorDestination('character'),
+    draftKey: 'character:gen-history-big',
+    catalog: { catalog, failed: false, retry: vi.fn() },
+    remember: rememberGen, chooseModel: vi.fn(),
+  }} />)); await flush();
+
+  expect(document.body.textContent).not.toContain('The reference image is larger than the 2 MiB OpenDesign upload limit.');
+  expect(rememberGen).toHaveBeenCalled();
+
+  await act(async () => container.querySelectorAll<HTMLButtonElement>('.om-assets-heading .om-choice-tabs button')[1].click()); await flush();
+  await act(async () => { container.querySelector<HTMLButtonElement>('.om-gen-open')!.click(); }); await flush();
+  const lightbox = container.querySelector<HTMLElement>('[role="dialog"].om-gen-lightbox')!;
+  expect(lightbox).not.toBeNull();
+  const useRefBtn = [...lightbox.querySelectorAll<HTMLButtonElement>('button')].find(node => node.textContent?.includes('Use as reference'));
+  expect(useRefBtn).toBeDefined();
+  await act(async () => { useRefBtn!.click(); }); await flush();
+  expect(document.body.textContent).toContain('The reference image is larger than the 2 MiB OpenDesign upload limit.');
+  expect(rememberGen.mock.lastCall?.[0].references).toEqual([]);
 });

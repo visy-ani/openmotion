@@ -234,7 +234,7 @@ export function reportProjectManage(action: Fields<'project_manage_result'>['act
   send('project_manage_result', { ...projectsPage, action, outcome, project_count: projectCount, ...(failedCount ? { failed_count: failedCount } : {}) });
 }
 /** Library uploads reuse the studio import result with library entry points; file names never leave the browser. */
-export function reportLibraryImport(entry: 'library_button' | 'library_drop' | 'library_new_version', requested: number, added: number) {
+export function reportLibraryImport(entry: 'library_button' | 'library_drop' | 'library_new_version' | 'other', requested: number, added: number) {
   const failed = Math.max(0, requested - added);
   send('studio_asset_import_result', { entry_point: entry, outcome: added === 0 ? 'failure' : failed ? 'partial' : 'success',
     requested_count: requested, added_count: added, failed_count: failed });

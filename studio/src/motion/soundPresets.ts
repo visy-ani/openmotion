@@ -1,5 +1,7 @@
 import type { Model } from '../../../shared/gateway';
-import { generationOptions } from '../../../shared/generation-options';
+import { defaultSpeechVoiceId, generationOptions, knownSpeechVoiceName } from '../../../shared/generation-options';
+import { openDesignModelLabel } from '../../../shared/opendesign-models';
+import { modelFamilyLabel } from './imageMenuModels';
 import { sceneExamples } from './sceneShowcase';
 
 export interface SoundTag {
@@ -186,6 +188,21 @@ export function estimateSpeechSeconds(text: string, speed = 1): number {
   return Math.max(1, Math.round(seconds));
 }
 
+/** Authentic timbre descriptors for built-in ElevenLabs premade voices. */
+const BUILTIN_VOICE_CHARACTER: Record<string, string> = {
+  '21m00Tcm4TlvDq8ikWAM': 'Female · Calm',
+  'JBFqnCBsd6RMkjVDRZzb': 'Male · Warm',
+  'EXAVITQu4vr4xnSDxMaL': 'Female · Soft',
+  'pNInz6obpgDQGcFmaJgB': 'Male · Deep',
+  'nPczCjzI2devNBz1zQrb': 'Male · Resonant',
+  'pFZP5JQG7iQjIQuC4Bku': 'Female · Velvety',
+};
+
+/** Enrich terse gender-only labels with concise timbre character when known. */
+export function voiceCharacterDetail(voiceId: string, fallbackDetail: string): string {
+  return Object.hasOwn(BUILTIN_VOICE_CHARACTER, voiceId) ? BUILTIN_VOICE_CHARACTER[voiceId] : fallbackDetail;
+}
+
 /** Parse gateway voice choices like "Rachel · Female" or "af_heart" into structured card data. */
 export function parseVoiceChoice(choice: { value: string | number; label: string }): ParsedVoiceOption {
   const value = String(choice.value);
@@ -206,6 +223,18 @@ export function parseVoiceChoice(choice: { value: string | number; label: string
   return { value, name: raw || value, detail: '', initials: (raw || value).slice(0, 2).toUpperCase() };
 }
 
+/** Resolve a unified, human-readable model display name across composer, list, dock and details. */
+export function resolveAudioModelLabel(
+  modelId: string | undefined,
+  models: readonly Model[] | undefined,
+): string | undefined {
+  if (!modelId) return undefined;
+  const matched = models?.find(model => model.id === modelId);
+  if (matched) return modelFamilyLabel(matched);
+  const bare = modelId.includes(':') ? modelId.slice(modelId.indexOf(':') + 1) : modelId;
+  return openDesignModelLabel(bare) ?? bare;
+}
+
 /** Resolve a readable voice display name from a saved asset version's parameters and model catalogue. */
 export function resolveSavedVoiceName(
   voiceValue: unknown,
@@ -216,16 +245,22 @@ export function resolveSavedVoiceName(
   const matched = modelId ? models?.find(model => model.id === modelId) : undefined;
   const fields = matched ? (matched.generationOptions ?? generationOptions(matched))?.fields ?? [] : [];
   const voiceField = fields.find(field => field.key === 'voice');
-  const effectiveValue = typeof voiceValue === 'string' && voiceValue.trim()
-    ? voiceValue
-    : useModelDefault
-      ? (matched?.defaults?.voice ?? voiceField?.default)
-      : undefined;
-  if (typeof effectiveValue !== 'string' || !effectiveValue.trim()) return undefined;
+  const explicitValue = typeof voiceValue === 'string' && voiceValue.trim() ? voiceValue.trim() : undefined;
+  const effectiveValue = explicitValue
+    ?? (useModelDefault
+      ? (typeof matched?.defaults?.voice === 'string' && matched.defaults.voice.trim()
+        ? matched.defaults.voice.trim()
+        : typeof voiceField?.default === 'string' && voiceField.default.trim()
+          ? voiceField.default.trim()
+          : defaultSpeechVoiceId(modelId))
+      : undefined);
+  if (!effectiveValue) return undefined;
   const choice = voiceField?.choices?.find(item => String(item.value) === effectiveValue);
   if (choice) return parseVoiceChoice(choice).name;
-  const kokoro = effectiveValue.match(/^([ab])([fm])_(.+)$/i);
-  if (kokoro) return kokoro[3].charAt(0).toUpperCase() + kokoro[3].slice(1);
+  const known = knownSpeechVoiceName(effectiveValue);
+  if (known) return known;
+  // Preserve explicit custom provider voice IDs concisely instead of dropping them silently.
+  if (explicitValue) return explicitValue.length > 16 ? `${explicitValue.slice(0, 14)}…` : explicitValue;
   return undefined;
 }
 
@@ -251,18 +286,35 @@ export function deterministicWaveform(seed: string, barCount = 44): number[] {
   return bars;
 }
 
-/** Downsample or preserve a real RMS waveform to the requested bar count. */
+/** Resample a waveform envelope smoothly to any target bar count (supports both downsampling and upsampling). */
 export function resampleWaveform(waveform: readonly number[], targetBars: number): number[] {
-  if (!waveform.length) return [];
-  if (waveform.length <= targetBars) return [...waveform];
+  if (!waveform.length || targetBars <= 0) return [];
+  if (waveform.length === targetBars) return [...waveform];
+  if (waveform.length < targetBars) {
+    const output: number[] = [];
+    const last = waveform.length - 1;
+    for (let i = 0; i < targetBars; i++) {
+      const pos = targetBars > 1 ? (i * last) / (targetBars - 1) : 0;
+      const lo = Math.floor(pos);
+      const hi = Math.min(last, lo + 1);
+      const t = pos - lo;
+      output.push(Math.max(6, Math.round(waveform[lo] * (1 - t) + waveform[hi] * t)));
+    }
+    return output;
+  }
   const step = waveform.length / targetBars;
   const output: number[] = [];
   for (let i = 0; i < targetBars; i++) {
     const start = Math.floor(i * step);
     const end = Math.max(start + 1, Math.floor((i + 1) * step));
     let sum = 0;
-    for (let j = start; j < end && j < waveform.length; j++) sum += waveform[j];
-    output.push(Math.max(10, Math.round(sum / (end - start))));
+    let peak = 0;
+    for (let j = start; j < end && j < waveform.length; j++) {
+      sum += waveform[j];
+      if (waveform[j] > peak) peak = waveform[j];
+    }
+    const avg = sum / (end - start);
+    output.push(Math.max(6, Math.round(avg * 0.7 + peak * 0.3)));
   }
   return output;
 }

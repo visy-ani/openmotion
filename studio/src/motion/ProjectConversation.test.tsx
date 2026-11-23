@@ -31,7 +31,7 @@ it('keeps per-session drafts and messages isolated, with an session-scoped Agent
   const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
   await mount(); type('Unsent first draft');
   await act(async () => { container.querySelector<HTMLButtonElement>('.motion-conversation-message button')!.click(); });
-  expect(clipboard.mock.calls[0][0]).toContain('?session=project&project=project#project/project');
+  expect(clipboard.mock.calls[0][0]).toContain('/editor/project?session=project#project/project');
   expect(container.querySelector<HTMLTextAreaElement>('.motion-manual-copy')!.value).toContain('Original request');
   await mount('second');
   expect(container.textContent).toContain('Second request');

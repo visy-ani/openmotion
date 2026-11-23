@@ -1,6 +1,10 @@
 import type { Model } from './gateway.ts';
+import { generationOptions, type GenerationOption } from './generation-options.ts';
+import { isOpenDesignProvider, modelCapabilities, type MediaCapabilities } from './model-capabilities.ts';
 
-export type VideoFeatureId = 'camera-control' | 'multi-shot' | 'native-audio';
+export { isOpenDesignProvider };
+
+export type VideoFeatureId = 'camera-control' | 'multi-shot';
 
 export type OpenDesignVideoEntry = {
   modelId: string;
@@ -9,7 +13,6 @@ export type OpenDesignVideoEntry = {
   tagline: string;
   durations: { min: number; max: number; default: number };
   resolutions: readonly string[];
-  audioMode: 'toggle' | 'always-on';
 };
 
 /**
@@ -24,7 +27,6 @@ export const openDesignVideoModels: readonly OpenDesignVideoEntry[] = [
     tagline: '4–30s cinematic video up to 1080p with native audio.',
     durations: { min: 4, max: 30, default: 5 },
     resolutions: ['480p', '720p', '1080p'],
-    audioMode: 'toggle',
   },
   {
     modelId: 'doubao-seedance-2-5-flash-261115',
@@ -33,7 +35,6 @@ export const openDesignVideoModels: readonly OpenDesignVideoEntry[] = [
     tagline: 'Fast 4–30s generation at 480p/720p with native audio.',
     durations: { min: 4, max: 30, default: 5 },
     resolutions: ['480p', '720p'],
-    audioMode: 'toggle',
   },
   {
     modelId: 'wan-2.7',
@@ -42,15 +43,10 @@ export const openDesignVideoModels: readonly OpenDesignVideoEntry[] = [
     tagline: '2–15s 720p/1080p video with built-in synchronized audio.',
     durations: { min: 2, max: 15, default: 5 },
     resolutions: ['720p', '1080p'],
-    audioMode: 'always-on',
   },
 ];
 
 const openDesignVideoById = new Map(openDesignVideoModels.map(entry => [entry.modelId, entry]));
-
-export function isOpenDesignProvider(providerId: string) {
-  return providerId === 'account' || providerId === 'opendesign';
-}
 
 export function videoModelLabel(model: Pick<Model, 'modelId' | 'label'>) {
   return openDesignVideoById.get(model.modelId)?.label ?? model.label;
@@ -64,20 +60,22 @@ export type VideoFeatureChoice = { value: string; label: string; prompt: string 
 export type VideoFeatureControl = {
   key: string;
   label: string;
+  defaultValue?: string;
   choices: readonly [VideoFeatureChoice, ...VideoFeatureChoice[]];
 };
 
 export type VideoFeatureSpec = {
   id: VideoFeatureId;
+  requires: (capabilities: MediaCapabilities) => boolean;
   recommended: string;
   defaultDuration?: number;
-  forceAudio?: boolean;
   controls: readonly VideoFeatureControl[];
 };
 
 export const videoFeatures: Record<VideoFeatureId, VideoFeatureSpec> = {
   'camera-control': {
     id: 'camera-control',
+    requires: capabilities => capabilities.video.textToVideo,
     recommended: 'doubao-seedance-2-5-260628',
     controls: [
       {
@@ -106,12 +104,14 @@ export const videoFeatures: Record<VideoFeatureId, VideoFeatureSpec> = {
   },
   'multi-shot': {
     id: 'multi-shot',
+    requires: capabilities => capabilities.video.textToVideo,
     recommended: 'doubao-seedance-2-5-260628',
     defaultDuration: 10,
     controls: [
       {
         key: 'shots',
         label: 'Shot count',
+        defaultValue: '3',
         choices: [
           { value: '2', label: '2 shots', prompt: 'a cohesive 2-shot sequence' },
           { value: '3', label: '3 shots', prompt: 'a cohesive 3-shot narrative sequence' },
@@ -129,28 +129,16 @@ export const videoFeatures: Record<VideoFeatureId, VideoFeatureSpec> = {
       },
     ],
   },
-  'native-audio': {
-    id: 'native-audio',
-    recommended: 'doubao-seedance-2-5-260628',
-    forceAudio: true,
-    controls: [
-      {
-        key: 'audioStyle',
-        label: 'Sound direction',
-        choices: [
-          { value: 'ambience', label: 'Natural ambience', prompt: 'rich synchronized natural environmental ambience and realistic foley sound effects' },
-          { value: 'dialogue', label: 'Dialogue & voices', prompt: 'clear, natural synchronized spoken dialogue matching the character and scene acoustics' },
-          { value: 'cinematic', label: 'Cinematic score', prompt: 'immersive cinematic sound design, impactful foley, and subtle atmospheric score' },
-        ],
-      },
-    ],
-  },
 };
 
 export type VideoFeatureChoices = Record<string, string>;
 
+export function defaultVideoFeatureChoice(control: VideoFeatureControl): VideoFeatureChoice {
+  return (control.defaultValue ? control.choices.find(choice => choice.value === control.defaultValue) : undefined) ?? control.choices[0];
+}
+
 export function defaultVideoFeatureChoices(feature: VideoFeatureId): VideoFeatureChoices {
-  return Object.fromEntries(videoFeatures[feature].controls.map(control => [control.key, control.choices[0].value]));
+  return Object.fromEntries(videoFeatures[feature].controls.map(control => [control.key, defaultVideoFeatureChoice(control).value]));
 }
 
 export function videoFeaturePrompt(feature: VideoFeatureId, prompt: string, choices: VideoFeatureChoices = {}): string {
@@ -158,29 +146,51 @@ export function videoFeaturePrompt(feature: VideoFeatureId, prompt: string, choi
   if (!userText) return '';
   const spec = videoFeatures[feature];
   const parts = spec.controls.map(control => {
-    const selected = control.choices.find(choice => choice.value === choices[control.key]) ?? control.choices[0];
+    const selected = control.choices.find(choice => choice.value === choices[control.key]) ?? defaultVideoFeatureChoice(control);
     return selected.prompt;
   });
   if (feature === 'camera-control') {
     return `Camera direction: ${parts.join(', ')}. Scene: ${userText}`;
   }
-  if (feature === 'multi-shot') {
-    return `Multi-shot direction: ${parts.join(', ')}. Story: ${userText}`;
-  }
-  return `Audio direction: ${parts.join(', ')}. Scene: ${userText}`;
+  return `Multi-shot direction: ${parts.join(', ')}. Story: ${userText}`;
 }
 
-export function videoFeatureParameters(feature: VideoFeatureId, model: Pick<Model, 'provider' | 'modelId'>): Record<string, unknown> {
-  if (!isOpenDesignProvider(model.provider)) return {};
-  const meta = openDesignVideoById.get(model.modelId);
-  if (!meta) return {};
-  const spec = videoFeatures[feature];
-  const params: Record<string, unknown> = {};
-  if (spec.defaultDuration !== undefined && spec.defaultDuration >= meta.durations.min && spec.defaultDuration <= meta.durations.max) {
-    params.duration = spec.defaultDuration;
+/** Pure capability check (provider-agnostic): whether a model can run this video feature. */
+export function videoFeatureCapable(feature: VideoFeatureId, model: Model): boolean {
+  return model.modality === 'video' && videoFeatures[feature].requires(modelCapabilities(model));
+}
+
+/** Studio feature eligibility: OpenDesign route plus the required model capabilities. */
+export function videoFeatureSupported(feature: VideoFeatureId, model: Model): boolean {
+  return isOpenDesignProvider(model.provider) && videoFeatureCapable(feature, model);
+}
+
+function durationFieldSupports(field: GenerationOption, target: number): boolean {
+  if (field.kind === 'number') {
+    return (field.min === undefined || target >= field.min) && (field.max === undefined || target <= field.max);
   }
-  if (spec.forceAudio && meta.audioMode === 'toggle') {
-    params.generate_audio = true;
+  return Boolean(field.choices?.some(choice => Number(choice.value) === target));
+}
+
+export function videoFeatureParameters(
+  feature: VideoFeatureId,
+  model: Pick<Model, 'provider' | 'modelId'> & Partial<Model>,
+): Record<string, unknown> {
+  if (!isOpenDesignProvider(model.provider)) return {};
+  const spec = videoFeatures[feature];
+  const meta = openDesignVideoById.get(model.modelId);
+  const full = model.modality === 'video' ? (model as Model) : undefined;
+  const options = full ? (full.generationOptions ?? generationOptions(full)) : undefined;
+  const params: Record<string, unknown> = {};
+
+  if (spec.defaultDuration !== undefined) {
+    const durationField = options?.fields.find(item => item.key === 'duration');
+    if (durationField) {
+      // Honor the published duration schema strictly; never override it with static fallback bounds.
+      if (durationFieldSupports(durationField, spec.defaultDuration)) params.duration = spec.defaultDuration;
+    } else if (meta && spec.defaultDuration >= meta.durations.min && spec.defaultDuration <= meta.durations.max) {
+      params.duration = spec.defaultDuration;
+    }
   }
   return params;
 }

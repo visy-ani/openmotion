@@ -295,7 +295,7 @@ export function useProjectArchives(workspace: Workspace, waitForSaves: () => Pro
       </form>
     </SettingsDialog>}
   </>;
-  return { ...actions, busy, showManager, chooseImport, manager };
+  return { ...actions, open: opened, busy, showManager, chooseImport, manager };
 }
 
 export type ProjectArchiveActions = ReturnType<typeof useProjectArchives>;

@@ -28,6 +28,7 @@ Read the selected installed Skill, or its full MCP resource through `resources/r
 | Recreate a reference video for this film | openmotion-recreate | `openmotion://workflow/recreate/start` |
 | Turn a reference into a reusable template | openmotion-video-to-template | `openmotion://workflow/video-to-template/start` |
 | Scoped edits under established decisions, preview, troubleshooting or export | openmotion-production | `openmotion://workflow/production/start` |
+| Build or remix a playable browser game | openmotion-game | `openmotion://workflow/game/start` |
 | Generate an individual image, video, speech or music asset | openmotion-media | `openmotion://workflow/media/start` |
 
 Continue directly in that workflow, preserving the user's brief and existing decisions. These are instructions for the same Agent, not recursive tasks or a new creative intake. The selected workflow owns reference reading, revision protection, asset generation, preview and delivery. Read its conditional references as needed; do not load every workflow. Technical export validation, actual playback and human visual acceptance remain separate.

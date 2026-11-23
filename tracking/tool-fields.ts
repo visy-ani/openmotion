@@ -1,6 +1,7 @@
 const legacyAssetActions = ['list', 'get', 'import', 'update', 'generate', 'jobs', 'status', 'cancel', 'retry_save', 'resume', 'import_to_project'] as const;
-export const assetActions = [...legacyAssetActions, 'read', 'brand_kit', 'transcript'] as const;
+export const assetActions = [...legacyAssetActions, 'read', 'brand_kit', 'transcript', 'scenario', 'batch', 'trigger', 'web_publish'] as const;
 const actionSets = {
+  openmotion_game_trailer: ['start', 'status'],
   openmotion_assets_use: assetActions,
   openmotion_assets: legacyAssetActions,
   openmotion_media_use: ['inspect', 'reference', 'models', 'generate', 'status', 'cancel', 'retry_save', 'resume'],
@@ -9,8 +10,8 @@ const actionSets = {
   openmotion_project_archive: ['export', 'import'],
   openmotion_manage_project: ['comments', 'info', 'rename', 'duplicate', 'reveal', 'trash', 'restore', 'delete'],
   openmotion_design_catalog: ['list_scenarios', 'list_templates', 'get_template', 'list_skills', 'get_skill', 'list_design_systems', 'get_design_system', 'get_craft'],
-  openmotion_design_project: ['create', 'list', 'get', 'rename', 'duplicate', 'trash', 'restore', 'delete', 'open', 'open_in', 'export', 'import'],
-  openmotion_design_edit: ['read_file', 'write', 'list_versions', 'restore_version'],
+  openmotion_design_project: ['create', 'list', 'get', 'rename', 'duplicate', 'trash', 'restore', 'delete', 'open', 'open_in', 'export', 'import', 'deploy', 'deploy_status', 'unpublish'],
+  openmotion_design_edit: ['read_file', 'write', 'list_versions', 'restore_version', 'import_asset'],
   openmotion_design_comments: ['list', 'create', 'update', 'delete'],
 } as const;
 const targets = ['project', 'templates', 'providers'] as const;
@@ -77,6 +78,23 @@ const invalidFields = [
   'anchor.viewport.width', 'anchor.viewport.height', 'anchor.slideIndex', 'anchor.element.elementId',
   'anchor.element.htmlHint', 'anchor.region', 'anchor.region.x', 'anchor.region.y', 'anchor.region.width',
   'anchor.region.height',
+  'scenario.command', 'scenario.runId', 'scenario.expectedRevision', 'scenario.requestId', 'scenario.scenarioId',
+  'scenario.includeArchived', 'scenario.offset', 'scenario.limit', 'scenario.title', 'scenario.locale',
+  'scenario.brief', 'scenario.changes', 'scenario.changes.title', 'scenario.changes.archived',
+  'scenario.changes.activeStepId', 'scenario.changes.label', 'scenario.changes.tags', 'scenario.changes.tags[]',
+  'scenario.changes.pinned', 'scenario.stepId', 'scenario.status', 'scenario.draft', 'scenario.bindings',
+  'scenario.activeIterationId', 'scenario.iterationNote', 'scenario.iterationNote.iterationId',
+  'scenario.iterationNote.note', 'scenario.items', 'scenario.items[]', 'scenario.items[].ref',
+  'scenario.items[].label', 'scenario.items[].tags', 'scenario.items[].tags[]', 'scenario.items[].stepId',
+  'scenario.items[].source', 'scenario.poolItemId', 'scenario.iteration', 'scenario.iteration.source',
+  'scenario.iteration.prompt', 'scenario.iteration.settings', 'scenario.iteration.inputs',
+  'scenario.iteration.inputs[]', 'scenario.iteration.outputs', 'scenario.iteration.outputs[]',
+  'scenario.iteration.note', 'scenario.iterationId', 'scenario.modality', 'scenario.model', 'scenario.mode',
+  'scenario.prompt', 'scenario.parameters', 'scenario.referencePoolItemIds', 'scenario.referencePoolItemIds[]',
+  'scenario.scene', 'scenario.templateId', 'scenario.designProjectId', 'scenario.expectedDesignRevision',
+  'scenario.target', 'scenario.alt', 'scenario.projectType', 'scenario.requirements', 'scenario.poolItemIds',
+  'scenario.poolItemIds[]', 'scenario.projectId', 'scenario.stepIds', 'scenario.stepIds[]',
+  'scenario.activeOnly', 'scenario.includeStandaloneHtml', 'scenario.includeMotionSource',
 ] as const;
 export const toolErrorCodes = [
   'COMMENT_TARGET_NOT_FOUND', 'COMMENT_NOT_FOUND', 'COMMENT_CONFLICT', 'COMMENT_LIMIT', 'NOT_FOUND', 'UNSUPPORTED',

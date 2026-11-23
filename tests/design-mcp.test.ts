@@ -19,10 +19,10 @@ import { readWorkflowResource, workflowResources } from '../shared/workflow.ts';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 
-test('MCP registry exposes 22 phase-1 tools including the 4 design tools and design workflow resources', async () => {
-  assert.equal(phase1Tools.length, 22);
+test('MCP registry exposes 34 phase-1 tools including the 12 game and 4 design tools and design workflow resources', async () => {
+  assert.equal(phase1Tools.length, 34);
   const registry = createToolRegistry(phase1Tools, 'phase1');
-  assert.equal(registry.tools.length, 22);
+  assert.equal(registry.tools.length, 34);
   for (const name of DESIGN_TOOL_NAMES) {
     assert(registry.tools.some(t => t.name === name), `missing tool ${name}`);
   }
@@ -74,7 +74,7 @@ test('Phase1Service dispatches all 4 openmotion_design_* tools end-to-end', asyn
     assert.equal(resolved.comment.status, 'resolved');
 
     const opened = await service.call('openmotion_design_project', { action: 'open', projectId: pid });
-    assert.equal(opened.editorUrl, `http://127.0.0.1:4321/?page=design&scene=projects&designProject=${pid}`);
+    assert.equal(opened.editorUrl, `http://127.0.0.1:4321/design/projects/${pid}`);
     assert.equal(opened.openComments, 0);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -157,7 +157,7 @@ test('stdio MCP subprocess runs all 4 openmotion_design_* tools and openmotion-d
     assert.equal(init.serverInfo.version, pkgVersion);
 
     const listed = await send('tools/list');
-    assert.equal(listed.tools.length, 22);
+    assert.equal(listed.tools.length, 34);
     for (const name of DESIGN_TOOL_NAMES) assert.ok(listed.tools.some((tool: any) => tool.name === name), `missing ${name}`);
 
     const guide = await send('resources/read', { uri: 'openmotion://workflow/design/start' });

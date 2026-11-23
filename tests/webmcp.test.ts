@@ -39,11 +39,14 @@ test('all twenty-two registered domain names reuse public schemas and forward un
   const tools = buildOpenMotionWebMcpTools(async (url, init) => { calls.push({ url, init }); return Response.json(result); });
   assert.equal(tools.length, 22);
   assert.deepEqual(tools.map(tool => tool.name).sort(), Object.keys(inputs).sort());
+  // Game tools are external-Agent-only and deliberately excluded from WebMCP.
+  const browserTools = phase1Tools.filter(tool => !tool.name.startsWith('openmotion_game_'));
+  assert.deepEqual(tools.map(tool => tool.name), browserTools.map(tool => tool.name));
   for (const [i, tool] of tools.entries()) {
-    assert.equal(tool.inputSchema, phase1Tools[i].inputSchema);
-    assert.equal(tool.title, phase1Tools[i].title);
-    assert.ok(tool.description.startsWith(phase1Tools[i].description));
-    assert.equal(tool.annotations.readOnlyHint, phase1Tools[i].annotations.readOnlyHint);
+    assert.equal(tool.inputSchema, browserTools[i].inputSchema);
+    assert.equal(tool.title, browserTools[i].title);
+    assert.ok(tool.description.startsWith(browserTools[i].description));
+    assert.equal(tool.annotations.readOnlyHint, browserTools[i].annotations.readOnlyHint);
     const controller = new AbortController();
     assert.deepEqual(await tool.execute(inputs[tool.name], { signal: controller.signal }), result);
     assert.equal(calls[i].url, '/motion-api/phase1/call');

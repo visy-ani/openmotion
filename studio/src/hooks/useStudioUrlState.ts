@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../player";
 import { findElementForSelection, type DomEditSelection } from "../components/editor/domEditing";
 import { clampNumber, type RightPanelTab } from "../utils/studioHelpers";
+import { editorProjectIdFromPath } from '../../../shared/spa-routes';
 import { parseProjectIdFromHash } from "../utils/projectRouting";
 import { writeWorkspaceHistory } from '../utils/workspaceHistory';
 import {
@@ -92,7 +93,7 @@ function replaceHash(nextHash: string) {
   // A browser project navigation can be waiting for saves. The departing
   // editor must not replace that destination with its previous project hash.
   if (parseProjectIdFromHash(window.location.hash) !== parseProjectIdFromHash(nextHash)) return;
-  const requested = new URLSearchParams(window.location.search).get('project');
+  const requested = editorProjectIdFromPath(window.location.pathname) ?? new URLSearchParams(window.location.search).get('project');
   if (requested && requested !== parseProjectIdFromHash(nextHash)) return;
   writeWorkspaceHistory(nextHash, true);
 }

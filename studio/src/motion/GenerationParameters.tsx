@@ -4,8 +4,11 @@ import { Slider } from 'open-design-ui/slider';
 import { useId, useState } from 'react';
 import { modelReferenceLimit, type Model } from '../../../shared/gateway';
 import { compatibleImageResolutions, generationOptions, resolveGenerationParameters, usesInputImageRatio, videoAudioAlwaysOn, type GenerationOption } from '../../../shared/generation-options';
+import { cn } from '../components/ui/cn';
+import { FieldTrigger } from '../components/ui/FormField';
 import { Popover } from '../components/ui/Popover';
 import { Select } from '../components/ui/Select';
+import { SelectArrow } from '../components/ui/SelectArrow';
 import { RemixIcon } from '../icons/RemixIcons';
 import { useI18n } from '../i18n/I18n';
 
@@ -42,14 +45,14 @@ export function shotParameters(model: Model, preferences?: { aspect: string; dur
   }
   return { values, advanced: '{}' };
 }
-export function requestParameters(draft: ParameterDraft, model?: Model, hasInputImage = false): Record<string, unknown> {
+export function requestParameters(draft: ParameterDraft, model?: Model, hasInputImage = false, defaultValues?: Record<string, unknown>): Record<string, unknown> {
   const extra = JSON.parse(draft.advanced);
   if (!extra || typeof extra !== 'object' || Array.isArray(extra)) throw new Error('Model parameters must be a JSON object');
   const values = { ...draft.values };
   // Retain the inactive text-to-video choice in the editor, but keep explicit JSON instructions for validation.
   if (model && parameterInputImageRatio(model, draft, hasInputImage)) delete values.ratio;
-  // Quick controls are explicit overrides; deleting a quick override restores advanced/default values.
-  const parameters = { ...extra, ...values };
+  // Quick controls override advanced JSON, which in turn overrides Studio-level fallback defaults.
+  const parameters = { ...defaultValues, ...extra, ...values };
   if (model) resolveGenerationParameters(model, parameters, hasInputImage);
   return parameters;
 }
@@ -59,20 +62,23 @@ export function parameterInputImageRatio(model: Model, draft: ParameterDraft, ha
   return modelReferenceLimit(model) > 0 && usesInputImageRatio(model, hasInputImage, parameters);
 }
 
-function DurationControl({
+export function DurationControl({
   field,
   currentValue,
   inputId,
+  showInput = true,
   onCommit,
 }: {
   field: GenerationOption;
   currentValue: number | undefined;
   inputId?: string;
+  showInput?: boolean;
   onCommit: (next: number | undefined) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const generatedId = useId();
   const [preview, setPreview] = useState<number | null>(null);
+  const seconds = new Intl.NumberFormat(locale ?? 'en', { style: 'unit', unit: 'second', unitDisplay: 'narrow' });
 
   if (field.kind === 'choice') {
     return (
@@ -85,7 +91,7 @@ function DurationControl({
             aria-pressed={currentValue === option.value}
             onClick={() => onCommit(Number(option.value))}
           >
-            {typeof option.value === 'number' && option.value > 0 ? `${option.value}s` : t(option.label)}
+            {typeof option.value === 'number' && option.value > 0 ? seconds.format(option.value) : t(option.value === -1 ? 'Auto' : option.label)}
           </Button>
         ))}
       </div>
@@ -102,8 +108,8 @@ function DurationControl({
   return (
     <div className="om-duration-control">
       <div className="om-creation-row om-duration-header">
-        <span className="om-duration-readout">{displayValue !== undefined ? `${displayValue}s` : t('Auto')}</span>
-        <label className="om-field om-duration-input">
+        <span className="om-duration-readout">{displayValue !== undefined ? seconds.format(displayValue) : t('Auto')}</span>
+        {showInput && <label className="om-field om-duration-input">
           <input
             id={inputId ?? generatedId}
             aria-label={t(field.label)}
@@ -118,7 +124,7 @@ function DurationControl({
               onCommit(e.target.value === '' ? undefined : Number(e.target.value));
             }}
           />
-        </label>
+        </label>}
       </div>
       <div className="om-duration-track">
         <Slider
@@ -157,8 +163,14 @@ function DurationControl({
 }
 
 /** `hidden` fields are set by the feature itself, so they are not offered as choices. */
-export function GenerationParameters({ model, draft, hasInputImage = false, hidden = [], onChange }: { model: Model; draft: ParameterDraft; hasInputImage?: boolean; hidden?: readonly string[]; onChange: (draft: ParameterDraft) => void }) {
+export function GenerationParameters({ model, draft, defaultValues, hasInputImage = false, hidden = [], appearance = 'standard', popupClassName, onChange }: {
+  model: Model; draft: ParameterDraft; defaultValues?: Record<string, unknown>; hasInputImage?: boolean; hidden?: readonly string[];
+  appearance?: 'standard' | 'boxed'; popupClassName?: string; onChange: (draft: ParameterDraft) => void;
+}) {
   const { t } = useI18n();
+  const settingsLabelId = useId();
+  const settingsSummaryId = useId();
+  const boxed = appearance === 'boxed';
   let extra: Record<string, unknown> = {};
   try { extra = requestParameters({ ...draft, values: {} }); } catch { /* The raw editor remains editable; submission reports parse errors through Toast. */ }
   const inputImageRatio = parameterInputImageRatio(model, draft, hasInputImage);
@@ -168,6 +180,7 @@ export function GenerationParameters({ model, draft, hasInputImage = false, hidd
   const activeAspectRatio = draft.values.aspect_ratio ?? extra.aspect_ratio ?? model.defaults?.aspect_ratio ?? aspectField?.default;
   const allowedResolutions = compatibleImageResolutions(model, activeAspectRatio, hasInputImage);
   const effectiveDefault = (field: GenerationOption) => {
+    if (defaultValues && defaultValues[field.key] !== undefined) return defaultValues[field.key];
     if (field.key === 'resolution' && allowedResolutions) {
       if (!allowedResolutions.length) return undefined;
       return typeof field.default === 'string' && allowedResolutions.includes(field.default) ? field.default : allowedResolutions[0];
@@ -199,7 +212,14 @@ export function GenerationParameters({ model, draft, hasInputImage = false, hidd
     }
     onChange({ ...draft, values });
   };
-  const summary = [...(inputImageRatio ? [t('Follows first frame')] : []), ...fields.filter(f => f.kind !== 'text' && f.key !== 'seed' && f.presentation !== 'count' && value(f) !== undefined).map(label)].slice(0, 3).join(' · ');
+  const summaryLabel = (field: GenerationOption) => {
+    const text = label(field);
+    if (/\d/.test(text) || field.key === 'aspect_ratio' || field.key === 'ratio' || field.key === 'resolution' || field.key === 'size' || field.key === 'duration') {
+      return text;
+    }
+    return `${t(field.label)} ${text}`;
+  };
+  const summary = [...(inputImageRatio ? [t('Follows first frame')] : []), ...fields.filter(f => f.kind !== 'text' && f.key !== 'seed' && f.presentation !== 'count' && value(f) !== undefined).map(summaryLabel)].slice(0, 3).join(' · ');
   const constraints = Object.assign({}, ...fields.map(f => f.choices?.find(c => c.value === value(f))?.requires)) as Record<string, string | number>;
   const count = fields.find(f => f.presentation === 'count');
   const isVideo = model.modality === 'video';
@@ -258,13 +278,25 @@ export function GenerationParameters({ model, draft, hasInputImage = false, hidd
   };
   const fieldSelect = (field: GenerationOption) => {
     const choices = choicesFor(field);
-    return <Select label={t(field.label)} value={selectValue(field)} onCommit={next => set(field, choices.find(choice => String(choice.value) === next)?.value)}
-      options={[{ value: '__auto', label: t('Model default') }, ...choices.map(choice => ({
+    const current = selectValue(field);
+    const hasDefault = (model.defaults?.[field.key] ?? effectiveDefault(field)) !== undefined;
+    const autoOption = !hasDefault || current === '__auto' ? [{ value: '__auto', label: t('Model default') }] : [];
+    return <Select label={t(field.label)} value={current} popupClassName={popupClassName} onCommit={next => set(field, choices.find(choice => String(choice.value) === next)?.value)}
+      options={[...autoOption, ...choices.map(choice => ({
         value: String(choice.value), label: t(field.key === 'resolution' && /^\d+k$/i.test(choice.label) ? choice.label.toUpperCase() : choice.label),
         disabled: constraints[field.key] !== undefined && constraints[field.key] !== choice.value,
       }))]} />;
   };
-  return <div className="om-generation-settings">
+  const settingsLabel = t('Generation settings');
+  const settingsSummary = compactSummary ? t('Advanced parameters') : summary || (boxed ? t('Model parameters') : settingsLabel);
+  const settingsTrigger = boxed ? <FieldTrigger className="om-picker-trigger om-generation-summary"
+    aria-labelledby={settingsLabelId} aria-describedby={settingsSummaryId}>
+    <RemixIcon name="equalizer-line" size={17} /><span id={settingsSummaryId}>{settingsSummary}</span><SelectArrow />
+  </FieldTrigger> : <Button variant="plain" className="om-nav-item om-generation-summary">
+    <RemixIcon name="equalizer-line" size={17} /><span>{settingsSummary}</span><RemixIcon name="arrow-down-s-line" size={15} />
+  </Button>;
+  return <div className={boxed ? 'om-label' : 'om-generation-settings'}>
+    {boxed && <span id={settingsLabelId} className="om-eyebrow">{settingsLabel}</span>}
     {hasQuickCards && (
       <div className="om-param-cards">
         {durationField && (
@@ -380,7 +412,7 @@ export function GenerationParameters({ model, draft, hasInputImage = false, hidd
       </div>
     )}
     <div className="om-generation-summary-row" data-compact={compactSummary || undefined}>
-      <Popover side="top" align="start" aria-label={t('Generation settings')} className="om-generation-popover" trigger={<Button variant="plain" className="om-nav-item om-generation-summary"><RemixIcon name="equalizer-line" size={17} /><span>{compactSummary ? t('Advanced parameters') : summary || t('Generation settings')}</span><RemixIcon name="arrow-down-s-line" size={15} /></Button>}>
+      <Popover side="top" align="start" aria-label={settingsLabel} className={cn('om-generation-popover', popupClassName)} trigger={settingsTrigger}>
         <div className="om-creation-row"><strong>{t('Generation settings')}</strong><Button variant="plain" className="om-nav-item" onClick={() => onChange(emptyParameters)}>{t('Reset')}</Button></div>
         <p className="om-eyebrow">{model.label}</p>
         {inputImageRatio && <p className="om-muted">{t('Aspect ratio follows the first frame.')}</p>}

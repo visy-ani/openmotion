@@ -537,7 +537,7 @@ it('copies the shared brief, retains guides and gates editable-project opening',
   await act(async () => button('复刻模板').click());
   expect(host.querySelector('dialog[aria-label=复刻模板]')).toBeNull();
   expect(document.querySelector('[data-feedback-layer]')?.textContent).toContain('已复制，发给 Agent 即可。');
-  expect(navigator.clipboard.writeText).toHaveBeenCalledWith('使用说明：请使用 OpenMotion 插件。如未安装，请按 `https://github.com/nexu-io/openmotion` 安装并接入后继续。\n指定模板：First（one）\n创作要求：基于模板，结合我的要求和附件创作，默认保留主要动效与风格，并交付 HTML 和 MP4。\n我的要求：\n');
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith('使用说明：请使用 OpenMotion 插件。如未安装，请按 `https://github.com/nexu-io/openmotion` 安装并接入后继续。\n指定模板：First（one）\n创作要求：基于模板，结合我的要求和附件创作。保留原模板的场景、界面和动画结构（可编辑模板直接原地替换文字与素材），不另写简陋文字卡页面；需要舍弃内容时先说明取舍，并交付 HTML 和 MP4。\n我的要求：\n');
   await act(async () => button('打开并编辑').click());
   expect(onOpen).toHaveBeenCalledWith('one');
   await act(async () => button('预览模板 Second', host.querySelector('main')!).click());
@@ -551,7 +551,7 @@ it.each(['repository', 'cms'] as const)('updates the displayed and copied title 
     const expected = [
       '使用说明：请使用 OpenMotion 插件。如未安装，请按 `https://github.com/nexu-io/openmotion` 安装并接入后继续。',
       `指定模板：${title}（${id}）`,
-      '创作要求：基于模板，结合我的要求和附件创作，默认保留主要动效与风格，并交付 HTML 和 MP4。',
+      '创作要求：基于模板，结合我的要求和附件创作。保留原模板的场景、界面和动画结构（可编辑模板直接原地替换文字与素材），不另写简陋文字卡页面；需要舍弃内容时先说明取舍，并交付 HTML 和 MP4。',
       '我的要求：\n',
     ].join('\n');
     expect(host.querySelector('section[aria-label="模板复刻指令"] p')?.textContent).toBe(expected);

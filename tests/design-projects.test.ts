@@ -23,7 +23,7 @@ test('design project lifecycle: create blank/template, revision conflict, idempo
     assert.equal(created.versionLabel, 'v1');
     assert(created.files.some(f => f.path === 'index.html'));
     assert(created.files.some(f => f.path === 'DESIGN.md'));
-    assert(created.editorUrl.includes(`designProject=${created.id}`));
+    assert.equal(created.editorUrl, `http://127.0.0.1:4100/design/projects/${created.id}`);
 
     // Replay same requestId returns identical project without duplicating.
     const replayed = await service.create({ requestId: 'req-create-1', scenario: 'prototype', title: 'Landing Demo', designSystemId: 'stripe' }, 'http://127.0.0.1:4100');
@@ -253,6 +253,77 @@ test('raw HTML previews are served with CSP sandbox header while sub-resources r
     const cssRes = await fetch(`http://127.0.0.1:${port}/api/design/raw/${created.id}/styles.css`);
     assert.equal(cssRes.status, 200);
     assert.equal(cssRes.headers.get('content-security-policy'), null);
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await cleanup();
+  }
+});
+
+test('catalog template thumb preview injects WebGL disposal and setInterval throttling guards', async () => {
+  const { dir, cleanup } = await tempService();
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    const handled = await designHttp(req, res, url, dir, 'http://127.0.0.1', async () => ({}));
+    if (!handled) { res.writeHead(404); res.end(); }
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
+  const { port } = server.address() as { port: number };
+  try {
+    const listRes = await fetch(`http://127.0.0.1:${port}/api/design/catalog/templates?limit=1`);
+    assert.equal(listRes.status, 200);
+    const { items } = await listRes.json() as { items: Array<{ id: string; entry: string }> };
+    assert(items.length > 0, 'Expected at least one built-in design template');
+    const tpl = items[0];
+    const thumbRes = await fetch(`http://127.0.0.1:${port}/api/design/catalog/templates/${encodeURIComponent(tpl.id)}/preview/${tpl.entry}?thumb=1`);
+    assert.equal(thumbRes.status, 200);
+    const html = await thumbRes.text();
+    assert(html.includes('om:thumb-dispose'), 'Expected om:thumb-dispose handler in thumb perf guard');
+    assert(html.includes('WEBGL_lose_context'), 'Expected WEBGL_lose_context cleanup in thumb perf guard');
+    assert(html.includes('window.setInterval='), 'Expected setInterval throttling wrapper in thumb perf guard');
+    assert.equal(thumbRes.headers.get('access-control-allow-origin'), '*');
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await cleanup();
+  }
+});
+
+test('sandboxed design raw and template preview routes expose CORS headers for sibling data fetches', async () => {
+  const { dir, service, cleanup } = await tempService();
+  const created = await service.create({ requestId: 'req-cors-1', scenario: 'live-artifact', title: 'Live Metrics' });
+  await service.write(created.id, {
+    requestId: 'req-cors-2',
+    expectedRevision: created.revision,
+    files: [{ path: 'data.json', content: JSON.stringify({ revenue: '$4.82M' }) }],
+  });
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    const handled = await designHttp(req, res, url, dir, 'http://127.0.0.1', async () => ({}));
+    if (!handled) { res.writeHead(404); res.end(); }
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
+  const { port } = server.address() as { port: number };
+  try {
+    const preflightRes = await fetch(`http://127.0.0.1:${port}/api/design/raw/${created.id}/data.json`, { method: 'OPTIONS' });
+    assert.equal(preflightRes.status, 204);
+    assert.equal(preflightRes.headers.get('access-control-allow-origin'), '*');
+    assert.match(preflightRes.headers.get('access-control-allow-methods') ?? '', /GET/);
+
+    const dataRes = await fetch(`http://127.0.0.1:${port}/api/design/raw/${created.id}/data.json`);
+    assert.equal(dataRes.status, 200);
+    assert.equal(dataRes.headers.get('access-control-allow-origin'), '*');
+    assert.deepEqual(await dataRes.json(), { revenue: '$4.82M' });
+
+    const htmlRes = await fetch(`http://127.0.0.1:${port}/api/design/raw/${created.id}/index.html`);
+    assert.equal(htmlRes.status, 200);
+    assert.equal(htmlRes.headers.get('access-control-allow-origin'), '*');
+    assert.match(htmlRes.headers.get('content-security-policy') ?? '', /^sandbox /);
+
+    const listRes = await fetch(`http://127.0.0.1:${port}/api/design/catalog/templates?limit=1`);
+    const { items } = await listRes.json() as { items: Array<{ id: string; entry: string }> };
+    const tpl = items[0];
+    const tplPreflight = await fetch(`http://127.0.0.1:${port}/api/design/catalog/templates/${encodeURIComponent(tpl.id)}/preview/${tpl.entry}`, { method: 'OPTIONS' });
+    assert.equal(tplPreflight.status, 204);
+    assert.equal(tplPreflight.headers.get('access-control-allow-origin'), '*');
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()));
     await cleanup();

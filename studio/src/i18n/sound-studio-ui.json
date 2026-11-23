@@ -76,7 +76,6 @@
     "Clear filters": "清除筛选",
     "Sample": "试听样片",
     "Use": "使用",
-    "Reuse prompt": "复用提示词与参数",
     "Copy asset reference": "复制资产引用",
     "Asset reference copied": "已复制资产引用",
     "Drop audio files here": "拖放音频文件到这里上传",
@@ -151,7 +150,14 @@
     "British · Male": "英式 · 男声",
     "Recreate": "重新创作",
     "Generation cancelled": "已取消生成",
-    "Try again, or adjust your prompt and settings.": "请重试，或调整输入内容与参数。"
+    "Try again, or adjust your prompt and settings.": "请重试，或调整输入内容与参数。",
+    "More actions": "更多操作",
+    "Female · Calm": "女声 · 沉稳",
+    "Male · Warm": "男声 · 醇厚",
+    "Female · Soft": "女声 · 柔和",
+    "Male · Deep": "男声 · 低沉",
+    "Male · Resonant": "男声 · 磁性",
+    "Female · Velvety": "女声 · 灵动"
   },
   "ja": {
     "Soundscape": "音楽・効果音",
@@ -230,7 +236,6 @@
     "Clear filters": "フィルターをクリア",
     "Sample": "サンプル",
     "Use": "使う",
-    "Reuse prompt": "プロンプトと設定を再利用",
     "Copy asset reference": "アセット参照をコピー",
     "Asset reference copied": "アセット参照をコピーしました",
     "Drop audio files here": "ここにオーディオファイルをドロップ",
@@ -305,7 +310,14 @@
     "British · Male": "イギリス英語 · 男性",
     "Recreate": "再作成",
     "Generation cancelled": "生成をキャンセルしました",
-    "Try again, or adjust your prompt and settings.": "再試行するか、入力内容や設定を調整してください。"
+    "Try again, or adjust your prompt and settings.": "再試行するか、入力内容や設定を調整してください。",
+    "More actions": "その他の操作",
+    "Female · Calm": "女性 · 落ち着いた",
+    "Male · Warm": "男性 · 温かみ",
+    "Female · Soft": "女性 · やわらか",
+    "Male · Deep": "男性 · 低音",
+    "Male · Resonant": "男性 · 響き",
+    "Female · Velvety": "女性 · なめらか"
   },
   "ko": {
     "Soundscape": "음악 및 효과음",
@@ -384,7 +396,6 @@
     "Clear filters": "필터 초기화",
     "Sample": "샘플",
     "Use": "사용",
-    "Reuse prompt": "프롬프트 및 설정 재사용",
     "Copy asset reference": "에셋 참조 복사",
     "Asset reference copied": "에셋 참조를 복사했습니다",
     "Drop audio files here": "오디오 파일을 여기에 놓으세요",
@@ -459,7 +470,14 @@
     "British · Male": "영국식 · 남성",
     "Recreate": "다시 만들기",
     "Generation cancelled": "생성이 취소되었습니다",
-    "Try again, or adjust your prompt and settings.": "다시 시도하거나 입력 내용과 설정을 조정해 주세요."
+    "Try again, or adjust your prompt and settings.": "다시 시도하거나 입력 내용과 설정을 조정해 주세요.",
+    "More actions": "더 보기",
+    "Female · Calm": "여성 · 차분함",
+    "Male · Warm": "남성 · 따뜻함",
+    "Female · Soft": "여성 · 부드러움",
+    "Male · Deep": "남성 · 중저음",
+    "Male · Resonant": "남성 · 울림",
+    "Female · Velvety": "여성 · 매끄러움"
   },
   "de": {
     "Soundscape": "Musik & SFX",
@@ -538,7 +556,6 @@
     "Clear filters": "Filter zurücksetzen",
     "Sample": "Beispiel",
     "Use": "Nutzen",
-    "Reuse prompt": "Prompt & Einstellungen übernehmen",
     "Copy asset reference": "Asset-Referenz kopieren",
     "Asset reference copied": "Asset-Referenz kopiert",
     "Drop audio files here": "Audiodateien hier ablegen",
@@ -616,7 +633,14 @@
     "British · Male": "Britisch · Männlich",
     "Recreate": "Neu erstellen",
     "Generation cancelled": "Generierung abgebrochen",
-    "Try again, or adjust your prompt and settings.": "Versuche es erneut oder passe Prompt und Einstellungen an."
+    "Try again, or adjust your prompt and settings.": "Versuche es erneut oder passe Prompt und Einstellungen an.",
+    "More actions": "Weitere Aktionen",
+    "Female · Calm": "Weiblich · Ruhig",
+    "Male · Warm": "Männlich · Warm",
+    "Female · Soft": "Weiblich · Sanft",
+    "Male · Deep": "Männlich · Tief",
+    "Male · Resonant": "Männlich · Voll",
+    "Female · Velvety": "Weiblich · Samtig"
   },
   "fr": {
     "Soundscape": "Musique & SFX",
@@ -695,7 +719,6 @@
     "Clear filters": "Réinitialiser les filtres",
     "Sample": "Exemple",
     "Use": "Utiliser",
-    "Reuse prompt": "Réutiliser le prompt et les réglages",
     "Copy asset reference": "Copier la référence d’actif",
     "Asset reference copied": "Référence d’actif copiée",
     "Drop audio files here": "Déposez vos fichiers audio ici",
@@ -773,7 +796,14 @@
     "British · Male": "Britannique · Masculin",
     "Recreate": "Recréer",
     "Generation cancelled": "Génération annulée",
-    "Try again, or adjust your prompt and settings.": "Réessayez ou ajustez votre prompt et vos réglages."
+    "Try again, or adjust your prompt and settings.": "Réessayez ou ajustez votre prompt et vos réglages.",
+    "More actions": "Plus d’actions",
+    "Female · Calm": "Féminin · Calme",
+    "Male · Warm": "Masculin · Chaleureux",
+    "Female · Soft": "Féminin · Doux",
+    "Male · Deep": "Masculin · Grave",
+    "Male · Resonant": "Masculin · Profond",
+    "Female · Velvety": "Féminin · Velouté"
   },
   "ru": {
     "Soundscape": "Музыка и SFX",
@@ -852,7 +882,6 @@
     "Clear filters": "Сбросить фильтры",
     "Sample": "Пример",
     "Use": "Использовать",
-    "Reuse prompt": "Повторить промпт и параметры",
     "Copy asset reference": "Копировать ссылку ассета",
     "Asset reference copied": "Ссылка ассета скопирована",
     "Drop audio files here": "Перетащите аудиофайлы сюда",
@@ -932,7 +961,14 @@
     "British · Male": "Британский · Мужской",
     "Recreate": "Создать заново",
     "Generation cancelled": "Генерация отменена",
-    "Try again, or adjust your prompt and settings.": "Повторите попытку или измените промпт и параметры."
+    "Try again, or adjust your prompt and settings.": "Повторите попытку или измените промпт и параметры.",
+    "More actions": "Другие действия",
+    "Female · Calm": "Женский · Спокойный",
+    "Male · Warm": "Мужской · Тёплый",
+    "Female · Soft": "Женский · Мягкий",
+    "Male · Deep": "Мужской · Глубокий",
+    "Male · Resonant": "Мужской · Бархатный",
+    "Female · Velvety": "Женский · Нежный"
   },
   "es": {
     "Soundscape": "Música y SFX",
@@ -1011,7 +1047,6 @@
     "Clear filters": "Limpiar filtros",
     "Sample": "Muestra",
     "Use": "Usar",
-    "Reuse prompt": "Reutilizar prompt y ajustes",
     "Copy asset reference": "Copiar referencia del recurso",
     "Asset reference copied": "Referencia copiada",
     "Drop audio files here": "Suelta archivos de audio aquí",
@@ -1089,7 +1124,14 @@
     "British · Male": "Británica · Masculina",
     "Recreate": "Recrear",
     "Generation cancelled": "Generación cancelada",
-    "Try again, or adjust your prompt and settings.": "Inténtalo de nuevo o ajusta el prompt y los ajustes."
+    "Try again, or adjust your prompt and settings.": "Inténtalo de nuevo o ajusta el prompt y los ajustes.",
+    "More actions": "Más acciones",
+    "Female · Calm": "Femenina · Serena",
+    "Male · Warm": "Masculina · Cálida",
+    "Female · Soft": "Femenina · Suave",
+    "Male · Deep": "Masculina · Grave",
+    "Male · Resonant": "Masculina · Profunda",
+    "Female · Velvety": "Femenina · Aterciopelada"
   },
   "pt-BR": {
     "Soundscape": "Música e SFX",
@@ -1168,7 +1210,6 @@
     "Clear filters": "Limpar filtros",
     "Sample": "Amostra",
     "Use": "Usar",
-    "Reuse prompt": "Reutilizar prompt e ajustes",
     "Copy asset reference": "Copiar referência do ativo",
     "Asset reference copied": "Referência copiada",
     "Drop audio files here": "Solte arquivos de áudio aqui",
@@ -1246,7 +1287,14 @@
     "British · Male": "Britânico · Masculina",
     "Recreate": "Recriar",
     "Generation cancelled": "Geração cancelada",
-    "Try again, or adjust your prompt and settings.": "Tente novamente ou ajuste o prompt e as configurações."
+    "Try again, or adjust your prompt and settings.": "Tente novamente ou ajuste o prompt e as configurações.",
+    "More actions": "Mais ações",
+    "Female · Calm": "Feminina · Calma",
+    "Male · Warm": "Masculina · Calorosa",
+    "Female · Soft": "Feminina · Suave",
+    "Male · Deep": "Masculina · Grave",
+    "Male · Resonant": "Masculina · Marcante",
+    "Female · Velvety": "Feminina · Aveludada"
   },
   "it": {
     "Soundscape": "Musica e SFX",
@@ -1325,7 +1373,6 @@
     "Clear filters": "Cancella filtri",
     "Sample": "Esempio",
     "Use": "Usa",
-    "Reuse prompt": "Riutilizza prompt e impostazioni",
     "Copy asset reference": "Copia riferimento risorsa",
     "Asset reference copied": "Riferimento copiato",
     "Drop audio files here": "Trascina qui i file audio",
@@ -1403,7 +1450,14 @@
     "British · Male": "Britannico · Maschile",
     "Recreate": "Ricrea",
     "Generation cancelled": "Generazione annullata",
-    "Try again, or adjust your prompt and settings.": "Riprova o modifica il prompt e le impostazioni."
+    "Try again, or adjust your prompt and settings.": "Riprova o modifica il prompt e le impostazioni.",
+    "More actions": "Altre azioni",
+    "Female · Calm": "Femminile · Calma",
+    "Male · Warm": "Maschile · Calda",
+    "Female · Soft": "Femminile · Morbida",
+    "Male · Deep": "Maschile · Profonda",
+    "Male · Resonant": "Maschile · Risonante",
+    "Female · Velvety": "Femminile · Vellutata"
   },
   "tr": {
     "Soundscape": "Müzik ve SFX",
@@ -1482,7 +1536,6 @@
     "Clear filters": "Filtreleri temizle",
     "Sample": "Örnek",
     "Use": "Kullan",
-    "Reuse prompt": "İstem ve ayarları yeniden kullan",
     "Copy asset reference": "Varlık referansını kopyala",
     "Asset reference copied": "Varlık referansı kopyalandı",
     "Drop audio files here": "Ses dosyalarını buraya bırakın",
@@ -1557,6 +1610,13 @@
     "British · Male": "İngiliz · Erkek",
     "Recreate": "Yeniden oluştur",
     "Generation cancelled": "Üretim iptal edildi",
-    "Try again, or adjust your prompt and settings.": "Tekrar deneyin veya istem ile ayarları düzenleyin."
+    "Try again, or adjust your prompt and settings.": "Tekrar deneyin veya istem ile ayarları düzenleyin.",
+    "More actions": "Diğer işlemler",
+    "Female · Calm": "Kadın · Sakin",
+    "Male · Warm": "Erkek · Sıcak",
+    "Female · Soft": "Kadın · Yumuşak",
+    "Male · Deep": "Erkek · Derin",
+    "Male · Resonant": "Erkek · Gür",
+    "Female · Velvety": "Kadın · Kadifemsi"
   }
 }

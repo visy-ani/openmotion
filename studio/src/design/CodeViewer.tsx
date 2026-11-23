@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
+import './codeViewer.css';
 
 type TokenKind = 'plain' | 'tag' | 'attr' | 'string' | 'comment' | 'keyword' | 'number';
 type Token = { kind: TokenKind; text: string };
 
-const CODE_TOKEN_RE = /<!--[\s\S]*?-->|\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|<\/?[a-zA-Z][\w:-]*|\/>|>|\b(?:const|let|var|function|return|if|else|for|while|import|export|from|async|await|true|false|null|undefined|@media|@keyframes|@page)\b|\b\d+(?:\.\d+)?(?:px|rem|em|vh|vw|%|ms|s)?\b/g;
+const CODE_TOKEN_RE = /<!--[\s\S]*?-->|\/\*[\s\S]*?\*\/|\/\/[^\n]*|<!doctype\b[^>]*>|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|<\/?[a-zA-Z][\w:-]*|\/>|>|\b[a-zA-Z_:][\w:-]*(?==)|\b(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|default|class|extends|new|this|super|import|export|from|as|async|await|try|catch|finally|throw|typeof|instanceof|in|of|void|true|false|null|undefined|@media|@keyframes|@page|@container|@import)\b|\b\d+(?:\.\d+)?(?:px|rem|em|vh|vw|%|ms|s|deg|fr)?\b/gi;
 
 function tokenizeLine(line: string): Token[] {
   const out: Token[] = [];
@@ -13,10 +14,13 @@ function tokenizeLine(line: string): Token[] {
   while ((m = CODE_TOKEN_RE.exec(line)) !== null) {
     if (m.index > last) out.push({ kind: 'plain', text: line.slice(last, m.index) });
     const text = m[0];
+    const nextChar = line[m.index + text.length];
     let kind: TokenKind = 'plain';
     if (text.startsWith('<!--') || text.startsWith('/*') || text.startsWith('//')) kind = 'comment';
-    else if (text.startsWith('"') || text.startsWith("'")) kind = 'string';
+    else if (/^<!doctype/i.test(text)) kind = 'comment';
+    else if (text.startsWith('"') || text.startsWith("'") || text.startsWith('`')) kind = 'string';
     else if (text.startsWith('<') || text === '>' || text === '/>') kind = 'tag';
+    else if (nextChar === '=' && /^[a-zA-Z_:]/.test(text)) kind = 'attr';
     else if (/^\d/.test(text)) kind = 'number';
     else kind = 'keyword';
     out.push({ kind, text });

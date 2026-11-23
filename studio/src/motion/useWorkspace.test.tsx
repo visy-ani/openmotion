@@ -148,7 +148,7 @@ it('waits for saves, deduplicates rapid actions and opens the new project in a n
   expect(writes()).toHaveLength(1);
   expect(writes()[0][0]).toBe(`/motion-api/projects?projectId=${first}`);
   expect(JSON.parse(writes()[0][1]!.body as string)).toEqual({ expectedRevision: status.revision, expectedProjectId: first });
-  expect(navigate).toHaveBeenCalledWith(`/?project=${second}#project/${second}`);
+  expect(navigate).toHaveBeenCalledWith(`/editor/${second}#project/${second}`);
 });
 it('save failures prevent creating, switching and leaving for home', async () => {
   await mount(async () => { throw new Error('Unsaved edit'); }, first);
@@ -188,13 +188,13 @@ it('an existing project page polls its own project without following another cli
   expect(fetcher.mock.calls.some(([url]) => url === `/motion-api/project/status?projectId=${first}`)).toBe(true);
 });
 it('an empty conversation opens its own first artifact even when another project is globally active', async () => {
-  history.replaceState(null, '', '/?session=conversation');
+  history.replaceState(null, '', '/editor?session=conversation');
   const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
   fetcher.mockImplementation(async (url: string) => Response.json(url.endsWith('/projects')
     ? { projects: [], sessions: [{ id: 'conversation', artifacts: [{ id: 'artifact-a', projectId: first }], activeArtifactId: 'artifact-a' }] }
     : { ...status, projectId: second }));
   await mount(async () => {}, undefined, 'conversation');
-  expect(replace).toHaveBeenCalledWith(`/?session=conversation&project=${first}&openArtifact=1#project/${first}`);
+  expect(replace).toHaveBeenCalledWith(`/editor/${first}?session=conversation&openArtifact=1#project/${first}`);
 });
 it('keeps a home request after failure and clears it only once the project was created with that request', async () => {
   await mount(async () => {});
@@ -209,7 +209,7 @@ it('keeps a home request after failure and clears it only once the project was c
   await act(() => workspace.create('Make a launch video'));
   expect(JSON.parse(writes()[1][1]!.body as string).instruction).toBe('Make a launch video');
   expect(localStorage.getItem('motion.home.draft.v1')).toBeNull();
-  expect(navigate).toHaveBeenCalledWith(`/?project=${second}#project/${second}`);
+  expect(navigate).toHaveBeenCalledWith(`/editor/${second}#project/${second}`);
 });
 it('creates the conversation before generating an artifact and retains it when generation fails', async () => {
   await mount(async () => {});
@@ -222,24 +222,62 @@ it('creates the conversation before generating an artifact and retains it when g
   });
   await act(() => workspace.startSession('New film', 'product-promo'));
   expect(writes().map(call => call[0])).toEqual(['/design-api/sessions', '/design-api/sessions/new-session/artifacts']);
-  expect(navigate).toHaveBeenCalledWith('/?session=new-session');
+  expect(navigate).toHaveBeenCalledWith('/editor?session=new-session');
   expect(localStorage.getItem('motion.home.draft.v1')).toBeNull();
   expect(sessionStorage.getItem('opendesign.session-error:new-session')).toBe('Generation failed');
 });
 it('activates the viewer when an external Agent produces an artifact for an open empty conversation', async () => {
-  history.replaceState(null, '', '/?session=conversation');
+  history.replaceState(null, '', '/editor?session=conversation');
   const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
   const original = fetcher.getMockImplementation()!;
   fetcher.mockImplementation(async (url: string, init?: RequestInit) => url.endsWith('/projects') ? new Response(JSON.stringify({ projects: [], sessions: [{ id: 'conversation', artifacts: [{ id: 'artifact', projectId: first }] }] })) : original(url, init));
   await mount(async () => {}, undefined, 'conversation');
-  expect(replace).toHaveBeenCalledWith(`/?session=conversation&project=${first}&openArtifact=1#project/${first}`);
+  expect(replace).toHaveBeenCalledWith(`/editor/${first}?session=conversation&openArtifact=1#project/${first}`);
+});
+
+it.each([
+  '/explore?session=conversation',
+  '/motion?session=conversation',
+  '/settings/providers?session=conversation',
+  '/settings/mcp?session=conversation',
+  '/model-hub/gemini-4?session=conversation',
+  '/models/custom%3Aprovider%2Fmodel?session=conversation',
+  '/mcp-setup?session=conversation&host=codex',
+  '/brand-kit/mine?session=conversation',
+  '/skills/manim?session=conversation',
+  '/studios/3d?session=conversation',
+  '/studios/3d/text-to-video?session=conversation',
+  '/studios/game?session=conversation&game=done',
+  '/scenarios?session=conversation',
+  '/scenarios/black-friday?session=conversation',
+  '/assets?session=conversation',
+  '/assets/asset-1?session=conversation',
+  '/design/prototype?session=conversation',
+  '/design/projects/d-1?session=conversation',
+  '/cinema?session=conversation',
+  '/cinema/text-to-video?session=conversation',
+  '/sound?session=conversation',
+  '/sound/sfx?session=conversation',
+  '/audio/music?session=conversation',
+  '/create/text-to-image?session=conversation',
+])('keeps migrated standalone path %s open when a retained session gains an artifact', async standaloneHref => {
+  history.replaceState(null, '', standaloneHref);
+  const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
+  const onNavigate = vi.fn();
+  const original = fetcher.getMockImplementation()!;
+  fetcher.mockImplementation(async (url: string, init?: RequestInit) => url.endsWith('/projects')
+    ? new Response(JSON.stringify({ projects: [], sessions: [{ id: 'conversation', artifacts: [{ id: 'artifact', projectId: first }] }] }))
+    : original(url, init));
+  await mount(async () => {}, undefined, 'conversation', onNavigate);
+  expect(replace).not.toHaveBeenCalled();
+  expect(onNavigate).not.toHaveBeenCalled();
 });
 
 it('unlocks actions after an in-page switch and scopes subsequent polling to the next project', async () => {
   const onNavigate = vi.fn();
   await mount(async () => {}, first, first, onNavigate);
   await act(() => workspace.open('projects', second));
-  expect(onNavigate).toHaveBeenCalledWith(`/?project=${second}#project/${second}`);
+  expect(onNavigate).toHaveBeenCalledWith(`/editor/${second}#project/${second}`);
   expect(navigate).not.toHaveBeenCalled();
   expect(workspace.busy).toBe(false);
   fetcher.mockImplementation(async (url: string) => Response.json(url.endsWith('/projects') ? { projects: [] } : { ...status, projectId: second }));
@@ -249,8 +287,8 @@ it('unlocks actions after an in-page switch and scopes subsequent polling to the
 });
 
 it.each([false, true])('guards browser history navigation before replacing the project (save failure=%s)', async failure => {
-  const originalUrl = `/?session=${first}&project=${first}#project/${first}`;
-  const targetUrl = `/?session=${second}&project=${second}#project/${second}`;
+  const originalUrl = `/editor/${first}?session=${first}#project/${first}`;
+  const targetUrl = `/editor/${second}?session=${second}#project/${second}`;
   history.replaceState(null, '', originalUrl);
   let finishSave!: () => void;
   const pending = new Promise<void>(resolve => { finishSave = resolve; });
@@ -267,4 +305,42 @@ it.each([false, true])('guards browser history navigation before replacing the p
     expect(location.href).toBe(new URL(originalUrl, location.origin).href);
     expect(workspace.navigationError?.message).toBe('Unsaved edit');
   } else expect(onNavigate).toHaveBeenCalledWith(new URL(targetUrl, location.origin).href, true);
+});
+
+it('preserves status and project references across unchanged polls and pauses polling while the tab is hidden', async () => {
+  vi.useFakeTimers();
+  let hidden = false;
+  vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden);
+  try {
+    await mount(async () => {}, first);
+    const initialStatus = workspace.status;
+    const initialProjects = workspace.projects;
+    const initialPollCount = fetcher.mock.calls.length;
+
+    // Next 1.8s poll with identical payload must preserve object identities so the root does not re-render consumers.
+    await act(async () => vi.advanceTimersByTimeAsync(1800));
+    expect(fetcher.mock.calls.length).toBeGreaterThan(initialPollCount);
+    expect(workspace.status).toBe(initialStatus);
+    expect(workspace.projects).toBe(initialProjects);
+
+    // Hide the document and advance past several poll intervals: zero requests should be fired while hidden.
+    hidden = true;
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(7200);
+    });
+    const hiddenCallCount = fetcher.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(3600));
+    expect(fetcher.mock.calls.length).toBe(hiddenCallCount);
+
+    // Restoring visibility resumes polling immediately.
+    hidden = false;
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+    expect(fetcher.mock.calls.length).toBeGreaterThan(hiddenCallCount);
+  } finally {
+    vi.useRealTimers();
+  }
 });

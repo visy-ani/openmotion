@@ -80,7 +80,7 @@ MCP 工具说明和领域执行位于 `mcp-tools.ts`；`mcp.ts` 保留初始化�
 | --- | --- | --- |
 | openmotion-production | production（默认） | start、intake、templates、production、verification、context、native、edit、portable、materials、transcripts、decisions、review、sound、account、compatible、fal、opendesign、atlascloud、wavespeed、typography、fonts、reference（共 23 项） |
 | openmotion-director | director | start、actions、craft、phrases、decisions、sound、review、examples |
-| openmotion-template-to-video | template | start、unchanged、firstuse、recipes（共 4 项） |
+| openmotion-template-to-video | template | start、unchanged、firstuse、recipes、adaptation（共 5 项） |
 | openmotion-recreate | recreate | start、rebuild、reconstruction、rendering、rendercode、verification |
 | openmotion-video-to-template | video-to-template | start、measure、rebuild、project、verification、sources |
 | openmotion-media | media（辅助素材生成，非成片主入口） | start、planning、setup、jobs、inspection、account、compatible、fal、opendesign、atlascloud、wavespeed（共 11 项） |
@@ -220,3 +220,7 @@ The MCP `initialize` instructions and the `openmotion_list_skills` description c
 - **Installed Skills first**: Skills already installed in the host stay the first choice and need no listing.
 - **No side effects**: listing, recommending or reading a Skill does not authorize project creation, downloads or export.
 
+
+## Game Studio
+
+`openmotion-game` is a supporting route for playable web games, independent of the five video routes. Read `openmotion://workflow/game/start` or [the Skill](../skills/openmotion-game/SKILL.md). It interviews for missing multiplayer/publication decisions, proposes one style formula, writes local source through seven game MCP tools, validates and play-tests, then publishes to the local market when authorized. Optional generated art requires discovered model support and explicit spending approval. Rooms use server-authoritative deterministic logic; publication is local, with no hosted deployment.

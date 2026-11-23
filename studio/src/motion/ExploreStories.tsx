@@ -12,6 +12,9 @@ import { floatingCity, seedanceStory, gptImageStory, storyModels, type ModelStor
 import { animeOpeningScenario, mcpCapabilities } from './mcpCapabilities';
 import { supportsScene, type StudioDestination } from './creativeStudios';
 import { archivedSkillPoster } from './skillCatalog';
+import { communityGames, genreLabels, styleLabels } from './game/gameCatalog';
+import { localizedGameDescription, localizedGameTitle } from './game/gameSuperAgent';
+import castleValleyPoster from './game/community/omw-castle-valley.jpg';
 
 const sale = archivedSkillPoster('sale-countdown');
 const shorts = archivedSkillPoster('multi-clips-to-reels');
@@ -39,6 +42,7 @@ export function ExploreHighlights({ onChooseStudio, onOpenBlackFriday }: Pick<St
     <header className="om-discovery-heading"><h2 id="explore-highlights">{t('Explore highlights')}</h2></header>
     <HorizontalRail label="Explore highlights" className="om-highlights" viewportClassName="om-stories-rail">
       <StoryCard title={seedanceStory.title} poster={paintedFilm} label={t('Cinema Studio') + ' · ' + t('Video')} description={seedanceStory.description} onClick={() => jump('seedance')} />
+      <StoryCard title="Game Studio" poster={castleValleyPoster} label={t('Super Agent') + ' · ' + t('Game Studio')} description="Build, play, and deploy multiplayer web games with your Agent" onClick={() => jump('games')} />
       <StoryCard title="Black Friday collection" poster={sale} label={t('Template library')} description="Browse Black Friday video references and Skills for your sale." onClick={event => onOpenBlackFriday(event.currentTarget)} />
       <StoryCard title="Claude Fable 5.2" poster={blueprint} label="Claude Code · OpenMotion MCP" description="From a keyframe to an anime opening" onClick={() => jump('claude')} />
       <StoryCard title={gptImageStory.title} poster={printCover} label={t('Design Studio') + ' · ' + t('Image')} description={gptImageStory.description} onClick={() => jump('gpt-image')} />
@@ -65,6 +69,52 @@ export function ModelCollection({ story, gateway, onNavigate, onModel }: {
         <Button type="button" variant="secondary" className="om-button" onClick={featured ? () => onModel(featured.id) : openModelSettings}>{t(featured ? 'Model details' : 'Manage providers')}<RemixIcon name="arrow-right-line" size={16} /></Button>}
     </header>
     <ModelStoryGallery story={story} models={models} loading={loading} onNavigate={onNavigate} brandedFallback showLabels={false} />
+  </section>;
+}
+
+const FEATURED_GAME_IDS = ['community-what-the-water-keeps', 'community-evensong'] as const;
+
+export function GameStories({ onOpenGameStudio, onBuildGameInSuperAgent }: {
+  onOpenGameStudio: (gameId?: string) => void;
+  onBuildGameInSuperAgent?: () => void;
+}) {
+  const { t, locale } = useI18n();
+  const preferred = FEATURED_GAME_IDS.map(id => communityGames.find(game => game.id === id)).filter((game): game is NonNullable<typeof game> => Boolean(game));
+  const featured = preferred.length === 2 ? preferred : communityGames.slice(0, 2);
+  return <section className="om-card om-claude-stories" aria-labelledby="explore-games">
+    <div className="om-claude-intro">
+      <span className="om-feed-card-label"><RemixIcon name="gamepad-line" size={16} />{t('Super Agent')} · {t('Playable web games')}</span>
+      <div className="om-discovery-heading"><h2 id="explore-games" tabIndex={-1}>{t('Game Studio')}</h2></div>
+      <p className="om-muted">{t('Describe a game in one line, iterate live with Super Agent, play solo or multiplayer, and deploy a shareable link.')}</p>
+      <div className="om-story-intro-actions">
+        {onBuildGameInSuperAgent && (
+          <Button type="button" variant="primary" className="om-button" data-primary onClick={onBuildGameInSuperAgent}>
+            {t('Build a game')}<RemixIcon name="arrow-right-line" size={16} />
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant={onBuildGameInSuperAgent ? 'secondary' : 'primary'}
+          className="om-button"
+          data-primary={onBuildGameInSuperAgent ? undefined : true}
+          onClick={() => onOpenGameStudio()}
+        >
+          {t('Explore games')}<RemixIcon name="arrow-right-line" size={16} />
+        </Button>
+      </div>
+    </div>
+    {featured.map(game => (
+      <StoryCard
+        key={game.id}
+        title={localizedGameTitle(game, locale)}
+        label={[t(genreLabels[game.genre]), game.style ? t(styleLabels[game.style]) : ''].filter(Boolean).join(' · ')}
+        poster={game.cover ?? ''}
+        credit={game.external ? `${game.external.author} · ${game.external.model}` : undefined}
+        creditUrl={game.external?.postUrl}
+        description={localizedGameDescription(game, locale)}
+        onClick={() => onOpenGameStudio(game.id)}
+      />
+    ))}
   </section>;
 }
 

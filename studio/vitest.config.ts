@@ -1,10 +1,11 @@
 import { defineConfig, mergeConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 import viteConfig from './vite.config';
+import { openmotionI18nPlugin } from './vite-i18n-plugin';
 
 // Unit/DOM tests need the production aliases and defines, but not CSS generation
 // or React Fast Refresh. Vite's automatic JSX transform still compiles the same JSX.
-export default mergeConfig({ ...viteConfig, plugins: [] }, defineConfig({
+export default mergeConfig({ ...viteConfig, plugins: [openmotionI18nPlugin()] }, defineConfig({
   resolve: { alias: [{ find: /^@hyperframes\/studio$/, replacement: fileURLToPath(new URL('./src/index.ts', import.meta.url)) }] },
   esbuild: { jsx: 'automatic', define: { 'import.meta.hot': 'undefined' } },
   test: {

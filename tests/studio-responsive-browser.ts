@@ -1,11 +1,17 @@
 // Run after build:studio with node --experimental-strip-types --test tests/studio-responsive-browser.ts.
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import test from 'node:test';
 import puppeteer, { type Page } from 'puppeteer-core';
 import { browserExecutable } from '../browser.ts';
+import { AssetLibrary } from '../gateway/asset-library.ts';
+import { scenarioRunsFor } from '../gateway/scenario-runs.ts';
 import { gatewayFor } from '../gateway/service.ts';
 import { startServer } from '../server.ts';
+import { editorProjectIdFromPath } from '../shared/spa-routes.ts';
 import { fixture } from './fixtures.ts';
+import { mediaBytes } from './media-fixtures.ts';
 
 async function checkCreator(page: Page, stacked: boolean) {
   const geometry = await page.$eval('.om-creator-pane', pane => {
@@ -40,7 +46,8 @@ test('Explore is home and project navigation stays in the workspace', { timeout:
       const origin = (await running.info()).previewUrl;
       await page.goto(new URL('/', origin).href, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('.om-explore-host:not([hidden])');
-      assert.equal(new URL(page.url()).searchParams.get('project'), null);
+      await page.waitForFunction(() => location.pathname === '/explore');
+      assert.equal(editorProjectIdFromPath(new URL(page.url()).pathname), null);
       for (const [width, theme] of [[1440, 'light'], [390, 'dark']] as const) {
         await page.setViewport({ width, height: 800 });
         await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
@@ -95,10 +102,113 @@ test('Explore is home and project navigation stays in the workspace', { timeout:
       assert.equal(await page.$('.om-project-navigation'), null);
       await page.goBack();
       await page.waitForSelector('.motion-timeline-icon-controls', { visible: true });
-      assert.equal(new URL(page.url()).searchParams.get('project'), new URL(editorUrl).searchParams.get('project'));
+      assert.equal(
+        editorProjectIdFromPath(new URL(page.url()).pathname),
+        editorProjectIdFromPath(new URL(editorUrl).pathname),
+      );
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.waitForSelector('.motion-timeline-icon-controls', { visible: true });
       assert.ok(await page.waitForSelector('.om-project-navigation:not([inert])', { visible: true }));
+    } finally { await browser.close(); await running.close(); }
+  });
+});
+
+test('Narrow workflows keep rounded card corners and scroll the full form', { timeout: 60_000 }, async () => {
+  await fixture(async store => {
+    const running = await startServer(store, 0, { editor: true });
+    const browser = await puppeteer.launch({ executablePath: await browserExecutable(), headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.evaluateOnNewDocument(() => {
+        localStorage.setItem('motion.studio.locale', 'zh-CN');
+        localStorage.setItem('hf-studio-ui-preferences', JSON.stringify({ theme: 'system' }));
+      });
+      const url = new URL('/?page=scenario&scenario=motion-full-chain', (await running.info()).previewUrl);
+      for (const [width, height, theme] of [[390, 740, 'light'], [695, 763, 'dark'], [899, 730, 'light']] as const) {
+        await page.setViewport({ width, height });
+        await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
+        await page.goto(url.href, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('.om-scenario-card-footer', { visible: true });
+        await page.evaluate(() => document.fonts.ready);
+        assert.ok(await page.$eval('.om-scenario-workbench', card => {
+          const { left, right, top } = card.getBoundingClientRect();
+          return [left + 2, right - 2].every(x => !card.contains(document.elementFromPoint(x, top + 2)));
+        }), `The card header stays inside the rounded corners at ${width}px`);
+        assert.ok(await page.evaluate(() => {
+          const form = document.querySelector('.om-scenario-step-frame')!.getBoundingClientRect();
+          const footer = document.querySelector('.om-scenario-card-footer')!.getBoundingClientRect();
+          return form.bottom <= footer.top + 1;
+        }), `The footer follows the entire form at ${width}px`);
+
+        await page.mouse.move(width - 30, height - 60);
+        await page.mouse.wheel({ deltaY: height * 2 });
+        await page.waitForFunction(() => {
+          const body = document.querySelector('.om-scenario-body')!;
+          const footer = document.querySelector('.om-scenario-card-footer')!;
+          return body.scrollTop > 0 && footer.getBoundingClientRect().bottom <= body.getBoundingClientRect().bottom;
+        }, { timeout: 5_000 });
+        await page.click('.om-scenario-primary-cta');
+        await page.waitForSelector('[data-step-frame="storyboard"]');
+      }
+    } finally { await browser.close(); await running.close(); }
+  });
+});
+
+test('Workflow asset cards keep audio controls inside the thumbnail', { timeout: 60_000 }, async () => {
+  await fixture(async store => {
+    const source = path.join(store.directory, 'track.mp3');
+    await writeFile(source, await mediaBytes('audio'));
+    const asset = await new AssetLibrary(store).importFile(source, { requestId: 'audio-card-asset', name: 'Track' });
+    const { run } = await scenarioRunsFor(store).create({ requestId: 'audio-card-run', scenarioId: 'motion-full-chain' });
+    const running = await startServer(store, 0, { editor: true });
+    const browser = await puppeteer.launch({ executablePath: await browserExecutable(), headless: true });
+    try {
+      const origin = (await running.info()).previewUrl;
+      const response = await fetch(new URL('/motion-api/phase1/call', origin), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: new URL(origin).origin },
+        body: JSON.stringify({
+          name: 'openmotion_assets_use',
+          arguments: {
+            action: 'scenario',
+            scenario: {
+              command: 'add_pool',
+              runId: run.id,
+              expectedRevision: run.revision,
+              requestId: 'audio-card-pool',
+              items: [{ ref: { type: 'asset', assetId: asset.id, versionId: asset.currentVersionId }, source: 'upload' }],
+            },
+          },
+        }),
+      });
+      assert.equal(response.status, 200, await response.text());
+      const page = await browser.newPage();
+      const url = new URL(`/?page=scenario&scenario=motion-full-chain&run=${run.id}`, origin);
+      for (const [width, theme] of [[390, 'light'], [761, 'dark'], [1440, 'dark']] as const) {
+        await page.setViewport({ width, height: 760 });
+        await page.emulateMediaFeatures([
+          { name: 'prefers-color-scheme', value: theme },
+          { name: 'prefers-reduced-motion', value: 'reduce' },
+        ]);
+        await page.goto(url.href, { waitUntil: 'domcontentloaded' });
+        const toggleSelector = width >= 1100 ? '.om-scenario-pool-desktop-toggle' : '.om-scenario-pool-toggle';
+        const toggle = await page.waitForSelector(toggleSelector, { visible: true, timeout: 5000 });
+        if (await toggle!.evaluate(button => button.getAttribute('aria-expanded')) === 'false') await toggle!.click();
+        await page.waitForSelector('.om-scenario-thumb--audio audio', { visible: true });
+        await page.waitForFunction(() => {
+          const audio = document.querySelector<HTMLAudioElement>('.om-scenario-thumb--audio audio');
+          return audio && Number.isFinite(audio.duration);
+        });
+        assert.ok(await page.$eval('.om-scenario-pool-card[data-kind="audio"]', card => {
+          const player = card.querySelector<HTMLAudioElement>('audio')!;
+          const bounds = player.getBoundingClientRect();
+          const preview = card.querySelector('.om-scenario-thumb--audio')!.getBoundingClientRect();
+          const details = card.querySelector('.om-scenario-pool-card-body')!.getBoundingClientRect();
+          return player.controls && bounds.height > 0 && bounds.top >= preview.top
+            && bounds.left >= preview.left && bounds.right <= preview.right
+            && bounds.bottom <= preview.bottom && bounds.bottom <= details.top;
+        }), `The player and timestamps fit inside the audio card at ${width}px`);
+      }
     } finally { await browser.close(); await running.close(); }
   });
 });
@@ -117,7 +227,7 @@ test('Design template details keep the project tooltip and clipboard fallback in
           throw new Error('Clipboard access denied');
         };
       });
-      const scene = new URL('/?page=design&scene=prototype', (await running.info()).previewUrl).href;
+      const scene = new URL('/design/prototype', (await running.info()).previewUrl).href;
       const dialog = '.om-design-tpl-detail-popup';
       const remix = `${dialog} button[aria-label="Remix into project"]`;
       const recreate = `${dialog} .om-media-detail-action-row button[data-primary]`;
@@ -191,9 +301,7 @@ test('Studio controls fit their resizable generator and timeline panes', { timeo
         localStorage.setItem('hf-studio-ui-preferences', JSON.stringify({ theme: 'system' }));
       });
       await page.setViewport({ width: 1280, height: 800 });
-      const url = new URL((await running.info()).previewUrl);
-      url.searchParams.set('page', 'cinema');
-      url.searchParams.set('scene', 'text-to-video');
+      const url = new URL('/cinema/text-to-video', (await running.info()).previewUrl);
       await page.goto(url.href, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('.om-creator-pane .om-asset-direct > button.om-button', { visible: true });
       await page.evaluate(() => document.fonts.ready);
@@ -209,7 +317,7 @@ test('Studio controls fit their resizable generator and timeline panes', { timeo
       }
       await page.mouse.move(5, 750);
       await page.waitForSelector('.om-creative-client-menu', { hidden: true });
-      assert.equal(new URL(page.url()).searchParams.get('page'), 'cinema', 'Hovering a destination preserves the current Studio');
+      assert.equal(new URL(page.url()).pathname, '/cinema/text-to-video', 'Hovering a destination preserves the current Studio');
       const divider = await page.waitForSelector('.om-creator-pane [role="separator"]');
       for (const [key, width] of [['Home', 310], ['End', 650]] as const) {
         await divider!.press(key);
@@ -230,7 +338,7 @@ test('Studio controls fit their resizable generator and timeline panes', { timeo
         await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: scheme }]);
         await page.waitForSelector(imageNav + ' > .om-nav-row-link', { visible: true });
         await page.click(imageNav + ' > .om-nav-row-link');
-        await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === 'design');
+        await page.waitForFunction(() => location.pathname === '/create/text-to-image');
         await page.waitForSelector('.om-creative-menu', { hidden: true });
         await page.waitForSelector('.om-generation-pickers [aria-label="Generation model"]', { visible: true });
         await page.mouse.move(5, 675);
@@ -243,7 +351,7 @@ test('Studio controls fit their resizable generator and timeline panes', { timeo
         await page.keyboard.press('Escape');
         await page.waitForSelector('.om-creative-menu', { hidden: true });
         await page.goBack();
-        await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === 'cinema');
+        await page.waitForFunction(() => location.pathname === '/cinema/text-to-video');
       }
       const more = await page.waitForSelector('::-p-aria([name="More Studio"][role="button"])', { visible: true });
       await more!.focus();
@@ -254,17 +362,17 @@ test('Studio controls fit their resizable generator and timeline panes', { timeo
         return bounds.left >= 0 && bounds.right <= innerWidth;
       }), 'The assets shortcut fits inside the narrow navigation menu');
       await folder!.click();
-      await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === 'assets');
+      await page.waitForFunction(() => location.pathname === '/assets');
       await page.goBack();
-      await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === 'cinema');
+      await page.waitForFunction(() => location.pathname === '/cinema/text-to-video');
       await page.setViewport({ width: 320, height: 690, hasTouch: true });
       await page.waitForSelector(imageNav);
       await page.tap(imageNav + ' > .om-nav-row-action');
       await page.waitForSelector('.om-creative-menu', { visible: true });
       await page.tap(imageNav + ' > .om-nav-row-link');
-      await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === 'design');
+      await page.waitForFunction(() => location.pathname === '/create/text-to-image');
       await page.waitForSelector('.om-creative-menu', { hidden: true });
-      await page.goto(new URL('/?page=editor', url).href, { waitUntil: 'domcontentloaded' });
+      await page.goto(new URL('/editor', url).href, { waitUntil: 'domcontentloaded' });
       const toolbar = await page.waitForSelector('.motion-timeline-icon-controls', { visible: true });
       assert.ok(await toolbar!.evaluate(el => {
         const bounds = el.getBoundingClientRect();
@@ -298,8 +406,7 @@ test('Explore fills every gallery row and plays the featured artwork in place', 
         } else void request.continue();
       });
       await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
-      const url = new URL((await running.info()).previewUrl);
-      url.searchParams.set('page', 'explore');
+      const url = new URL('/explore', (await running.info()).previewUrl);
       await page.goto(url.href, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('.om-feed-group [data-template-id]');
       await page.evaluate(() => document.fonts.ready);
@@ -408,7 +515,7 @@ test('Explore fills every gallery row and plays the featured artwork in place', 
         const start = await page.$eval(artwork, camera => getComputedStyle(camera).transform);
         await page.waitForFunction((selector, start) => getComputedStyle(document.querySelector(selector)!).transform !== start, {}, artwork, start);
         const scene = await page.$eval('.om-feature-carousel', hero => hero.getAttribute('data-scene'));
-        if (scene !== 'shot-image' && scene !== 'black-friday' && scene !== 'hub-gemini-4') {
+        if (scene !== 'black-friday' && scene !== 'hub-gemini-4') {
           await page.waitForFunction(selector => (document.querySelector(selector)?.querySelector('video')?.currentTime ?? 0) > 0.1, {}, artwork);
         }
       }
@@ -435,8 +542,7 @@ test('Sound Studio previews and seeks the welcome track in both wide and compact
         localStorage.setItem('motion.studio.locale', 'en');
         localStorage.setItem('hf-studio-ui-preferences', JSON.stringify({ theme: 'system' }));
       });
-      const url = new URL((await running.info()).previewUrl);
-      url.searchParams.set('page', 'sound');
+      const url = new URL('/sound/music', (await running.info()).previewUrl);
       for (const [width, theme] of [[1280, 'dark'], [390, 'light']] as const) {
         await page.setViewport({ width, height: 800 });
         await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
@@ -475,9 +581,7 @@ test('Sound Studio home shows the banner and templates and plays a template with
     try {
       const page = await browser.newPage();
       await page.evaluateOnNewDocument(() => localStorage.setItem('motion.studio.locale', 'en'));
-      const url = new URL((await running.info()).previewUrl);
-      url.searchParams.set('page', 'sound');
-      url.searchParams.set('home', '1');
+      const url = new URL('/sound', (await running.info()).previewUrl);
       for (const width of [1280, 390]) {
         await page.setViewport({ width, height: 800 });
         await page.goto(url.href, { waitUntil: 'domcontentloaded' });
@@ -504,7 +608,7 @@ test('the opt-in UI inspector outlines component roots, excludes its own control
     const browser = await puppeteer.launch({ executablePath: await browserExecutable(), headless: true });
     try {
       const page = await browser.newPage();
-      const url = new URL('/', (await running.info()).previewUrl);
+      const url = new URL('/explore', (await running.info()).previewUrl);
       await page.goto(url.href);
       await page.waitForSelector('[data-odui-component="button"]');
       assert.equal(await page.$('.odui-inspector'), null);
@@ -533,6 +637,32 @@ test('the opt-in UI inspector outlines component roots, excludes its own control
       await page.click('.odui-inspector-bar button:last-child');
       assert.equal(await page.$('.odui-inspector'), null);
       assert.notEqual(await page.$eval('#inspector-test > button', el => getComputedStyle(el).outlineStyle), 'dashed');
+    } finally { await browser.close(); await running.close(); }
+  });
+});
+
+test('legacy query bookmarks redirect in place to canonical semantic paths and preserve orthogonal params', { timeout: 60_000 }, async () => {
+  await fixture(async store => {
+    const running = await startServer(store, 0, { editor: false });
+    const browser = await puppeteer.launch({ executablePath: await browserExecutable(), headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.evaluateOnNewDocument(() => localStorage.setItem('motion.studio.locale', 'en'));
+      const origin = (await running.info()).previewUrl;
+      const cases = [
+        ['/?page=cinema&scene=text-to-video&embed=1', '/cinema/text-to-video', 'embed=1'],
+        ['/?page=settings&section=providers&embed=1', '/settings/providers', 'embed=1'],
+        ['/?page=mcp&host=claude&setup=manual', '/mcp-setup', 'host=claude'],
+        ['/?page=assets&embed=1', '/assets', 'embed=1'],
+        ['/?page=explore&community=product-films', '/explore', 'community=product-films'],
+      ] as const;
+      for (const [legacyHref, expectedPath, expectedQuery] of cases) {
+        await page.goto(new URL(legacyHref, origin).href, { waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(path => location.pathname === path, { timeout: 15_000 }, expectedPath);
+        const current = new URL(page.url());
+        assert.equal(current.pathname, expectedPath);
+        assert.ok(current.search.includes(expectedQuery), `expected ${current.href} to preserve ${expectedQuery}`);
+      }
     } finally { await browser.close(); await running.close(); }
   });
 });

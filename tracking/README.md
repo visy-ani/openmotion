@@ -554,7 +554,7 @@ backend/data directory. Deterministic coverage lives in
 The adapter preserves fixed actions, counts, booleans and safe catalog/control
 identifiers. It drops messages/stacks, file paths, selectors, composition/block
 names, free-text feedback, breadcrumb text and arbitrary error names. Feedback
-retains `has_comment`, rating and fixed question/answer categories; resolver
+retains `has_comment`, rating, an opaque browser-minted identifier for the prompt and fixed question/answer categories; resolver
 mismatches become per-kind counts, and attempt rollups retain total attempts and
 distinct-operation counts without raw JSON keys. Audio parameter numbers are
 bounded; string parameters retain only a fixed engine-catalog `value_category` and

@@ -15,9 +15,9 @@ import { reportHubClick, reportHubPageView } from './exploreTracking';
 import { BackToExploreButton } from './BackToExploreButton';
 
 /** Aggregates one model family: what it is, what to make with it, and whether this installation can use it. */
-export function ModelHub({ id, onExplore, onProvider, onModel, onUse, onSettings, hasProject = false }: {
+export function ModelHub({ id, onExplore, onProvider, onModel, onUse, onSettings, onStartScenario, hasProject = false }: {
   id: string; hasProject?: boolean; onExplore: () => void; onProvider: (provider: string) => void; onModel: (id: string) => void;
-  onUse: () => void; onSettings: (section: 'account' | 'subscription') => void;
+  onUse: () => void; onSettings: (section: 'account' | 'subscription') => void; onStartScenario?: () => void;
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -76,6 +76,11 @@ export function ModelHub({ id, onExplore, onProvider, onModel, onUse, onSettings
                 ? <Button variant="plain" className="om-button om-model-hub-connected" onClick={() => { track('hub_hero', 'manage_connection'); onProvider(hub.provider); }} title={t('Manage connection')}><RemixIcon name="checkbox-circle-fill" size={16} />{t('Connected to {provider}', { provider: provider.label })}</Button>
                 : <Button variant="ghost" className="om-button h-auto" onClick={() => { track('hub_hero', 'connect_key'); onProvider(hub.provider); }}><RemixIcon name="plug-line" size={16} />{t('Connect your own API key')}</Button>}
             </>}
+          {onStartScenario && (
+            <Button variant="ghost" type="button" className="om-button h-auto" onClick={() => { track('hub_hero', 'open_in_studio'); onStartScenario(); }}>
+              <RemixIcon name="route-line" size={16} />{t('Start Gemini 4 Neon workflow')}
+            </Button>
+          )}
         </div>
       </div>
     </header>

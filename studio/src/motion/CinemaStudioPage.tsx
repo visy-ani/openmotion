@@ -22,7 +22,7 @@ export function CinemaStudioPage({ onTemplate, onStart }: {
           <h1 id="cinema-studio-title">{title}</h1>
           <p>{chinese ? '从一个镜头开始。选择模板，用提示词或首帧把画面动起来。' : 'Start with a shot. Use a template to bring a prompt or a first frame to life.'}</p>
           <Button variant="ghost" className="om-button h-auto" data-primary="media" onClick={onStart}>
-            {t('Text to video')}<RemixIcon name="arrow-right-line" size={16} />
+            {t('Create video')}<RemixIcon name="arrow-right-line" size={16} />
           </Button>
         </div>
         <small className="om-scene-credit">{hero.credit}</small>
@@ -33,7 +33,7 @@ export function CinemaStudioPage({ onTemplate, onStart }: {
         <div className="om-studio-template-grid">
           {cinemaTemplates.map((template, position) => {
             const copy = chinese ? template.zh : template.en;
-            const mode = t(template.scene === 'text-to-video' ? 'Text to video' : 'Image to video');
+            const mode = t(template.scene === 'text-to-video' ? 'Create video' : 'Image to video');
             return <Button type="button" key={template.id} variant="plain" className="om-design-card om-design-gallery-card om-cinema-template-card"
               data-template-id={template.id} aria-label={copy.title} aria-describedby={`${template.id}-mode ${template.id}-details ${template.id}-materials`} onClick={() => onTemplate(template, position)}>
               <span className="om-design-card-thumb">

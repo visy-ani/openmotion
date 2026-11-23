@@ -214,6 +214,43 @@
   outline-offset: 2px;
 }
 
+/* Desktop app: treat the top banner as a window titlebar drag region so users can
+   drag or double-click to zoom/maximize the window, and only navigate when clicking
+   the explicit CTA link or close button. */
+:global([data-desktop="true"]) .banner {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+:global([data-desktop="true"]) .content {
+  padding-inline-start: max(var(--motion-space-48), calc(var(--motion-space-16) + var(--om-desktop-inset-left, 0px)));
+  padding-inline-end: calc(var(--motion-space-48) + var(--om-desktop-inset-right, 0px));
+}
+
+:global([data-desktop="true"]) .cta {
+  position: relative;
+  z-index: 2;
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+}
+
+:global([data-desktop="true"]) .cta::after {
+  content: none;
+}
+
+:global([data-desktop="true"]) .banner:hover .cta {
+  text-decoration-thickness: 1.5px;
+}
+
+:global([data-desktop="true"]) .cta:hover {
+  text-decoration-thickness: 2px;
+}
+
+:global([data-desktop="true"]) .close {
+  -webkit-app-region: no-drag;
+  right: calc(var(--motion-space-12) + var(--om-desktop-inset-right, 0px));
+}
+
 @media (max-width: 1320px) and (min-width: 1201px) {
   .content {
     gap: var(--motion-space-10);

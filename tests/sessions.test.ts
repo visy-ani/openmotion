@@ -138,7 +138,8 @@ test('Motion sessions own multiple independent artifacts and restore the last se
     const templated = await callTool('openmotion_apply_template', { expectedRevision: (await store.get()).revision, templateId: 'decision-tree' }, store) as any;
     assert.equal(new URL(templated.previewUrl).searchParams.get('embed'), '1');
     assert.equal(new URL(templated.sessionUrl).searchParams.has('embed'), false);
-    assert.equal(new URL(templated.previewUrl).searchParams.get('project'), templated.projectId);
+    assert.equal(new URL(templated.previewUrl).pathname, `/editor/${encodeURIComponent(templated.projectId)}`);
+    assert.equal(new URL(templated.previewUrl).hash, `#project/${encodeURIComponent(templated.projectId)}`);
     await store.trashProject(second.projectId, 'trash-recent-artifact');
     const mixed = await mutate(`/sessions/${session.id}/open`);
     assert.equal(mixed.status, 200, await mixed.clone().text());

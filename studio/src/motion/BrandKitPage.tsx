@@ -16,6 +16,8 @@ import { TemplateGalleryCard } from "./TemplateGalleryCard";
 import { useTemplatePlayback } from "./useTemplatePlayback";
 import type { GalleryTemplate } from "../../../shared/catalog";
 import { brandCoverRevision } from "../../../shared/brand-catalog";
+import { buildSuperAgentHandoff } from "../../../shared/capability-hub";
+import { useOptionalWorkspaceChrome } from "./WorkspaceChromeContext";
 import { BrandCatalogGallery } from "./BrandCatalogGallery";
 import { SettingsDialog } from "./settingsPrimitives";
 import { BrandKitDetail } from "./BrandKitDetail";
@@ -54,7 +56,8 @@ export function BrandKitPage({
   previewsEnabled?: boolean;
   hasProject?: boolean;
 }) {
-  const { t } = useI18n(),
+  const { t, locale } = useI18n(),
+    chrome = useOptionalWorkspaceChrome(),
     toast = useToast();
   const [kits, setKits] = useState<BrandKit[]>(),
     [error, setError] = useState(false),
@@ -330,7 +333,7 @@ export function BrandKitPage({
       <div className="om-media-detail-stage"><div className="om-media-detail-glass" /><div className="om-media-detail-media om-brand-video"><div className="om-brand-preview-placeholder"><RemixIcon name="palette-line" size={36} /><span className="om-title">Brand Kit</span></div></div></div>
       <aside className="om-media-detail-info"><div className="om-media-detail-nav"><IconButton variant="plain" className="om-gallery-round-button" aria-label={t('All brand kits')} onClick={back} icon={<RemixIcon name="close-line" size={20} />} /></div><div className="om-media-detail-body"><BrandKitCreate busy={busy} onCreate={create} /></div></aside>
     </div>}
-    {selected && <BrandKitDetail key={selected.id} kit={selected} busy={busy} onAction={action} onCopy={copy} onDownload={download} previewsEnabled={previewsEnabled} onClose={back} returnFocus={detailReturnFocus.current?.isConnected ? detailReturnFocus : root} position={detailPosition < 0 ? 1 : detailPosition + 1} total={detailOrder.length || 1} onNavigate={navigate} refreshFailed={error} onRefresh={refreshStatus} />}
+    {selected && <BrandKitDetail key={selected.id} kit={selected} busy={busy} onAction={action} onCopy={copy} onRunInSuperAgent={chrome?.openInSuperAgent ? () => chrome.openInSuperAgent!(buildSuperAgentHandoff({ kind: 'brand-kit', id: selected.catalogId || selected.id, title: selected.nameOverride || selected.name, subtitle: selected.websiteUrl || selected.url || selected.category, websiteUrl: selected.websiteUrl || selected.url, swatches: selected.sample?.colors, catalog: Boolean(selected.catalogId) }, { prompt: brandKitInstruction(selected), locale })) : undefined} onDownload={download} previewsEnabled={previewsEnabled} onClose={back} returnFocus={detailReturnFocus.current?.isConnected ? detailReturnFocus : root} position={detailPosition < 0 ? 1 : detailPosition + 1} total={detailOrder.length || 1} onNavigate={navigate} refreshFailed={error} onRefresh={refreshStatus} />}
     {detailId && kits && !selected && <SettingsDialog title={t('Brand Kit not found')} onClose={back}><Button variant="ghost" className="om-button h-auto" onClick={back}>{t('All brand kits')}</Button></SettingsDialog>}
   </>;
   if (inWorkspace) return <div ref={root} tabIndex={-1} className="om-gallery-surface om-brand-library" data-workspace-gallery role="region" aria-label={t('Brand Kit')}>{content}</div>;

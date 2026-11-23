@@ -6,17 +6,17 @@ export const MULTIMODAL_CAPABILITIES = [
   { icon: 'music-2-line', label: 'Music' },
 ] as const;
 
-export type AccountOffer = { title: string; detail: string; startsAt: string; endsAt?: string };
+export type AccountOffer = { title: string; detail?: string; startsAt: string; endsAt?: string };
 
 /**
- * The note beside the sign-in and upgrade guides. The standing annual price is 30% below twelve monthly list
- * prices for Plus, Pro and Max (AMR public pricing: $168 / $840 / $1,680 a year against $20 / $100 / $200 a
- * month), so it has no end date. A time-limited campaign sets `endsAt`; keep every message in settings-ui.json
- * for each locale.
+ * The note beside the sign-in and upgrade guides: the lowest price that includes multimodal generation. Plus is the
+ * lowest plan with image, video and audio models (Free and Go have none), and its standing annual price is $168 a
+ * year, $14 a month billed yearly (open-design.ai/pricing, read 2026-11-21; Pro $840, Max $1,680 a year). No price is delivered to
+ * Studio by Prism or AMR, so update this copy in settings-ui.json for every locale when that price changes. A
+ * time-limited campaign sets `endsAt`.
  */
 export const ACCOUNT_OFFER: AccountOffer | null = {
-  title: 'Annual offer',
-  detail: 'Plus, Pro and Max cost 30% less when billed yearly.',
+  title: 'Multimodal from $14/mo',
   startsAt: '2026-11-19T00:00:00Z',
 };
 

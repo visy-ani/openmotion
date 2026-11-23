@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { editorProjectIdFromPath } from "../../../shared/spa-routes";
 import { buildProjectHash, parseProjectIdFromHash } from "../utils/projectRouting";
 import { useMountEffect } from "./useMountEffect";
 import { trackStudioEvent } from "../utils/studioTelemetry";
 import { studioApiFetch } from "../utils/studioApiFetch";
+import { writeWorkspaceHistory } from "../utils/workspaceHistory";
 
 interface ServerConnectionState {
   projectId: string | null;
@@ -53,7 +55,8 @@ async function resolveHashProject(id: string): Promise<ProjectHashVerdict> {
  * event, no way to tell them apart in production.
  */
 /**
- * Rewrite the project hash WITHOUT pushing a history entry.
+ * Rewrite the project URL (hash, plus `/editor/:projectId` pathname or legacy
+ * `?project=` query when present) WITHOUT pushing a history entry.
  *
  * `location.hash =` pushes. That leaves the dead id as the previous entry, so
  * Back returns to it — and now that hashchange validates, Back would re-run the
@@ -61,7 +64,44 @@ async function resolveHashProject(id: string): Promise<ProjectHashVerdict> {
  * escape with the Back button.
  */
 function replaceProjectHash(projectId: string): void {
-  window.history.replaceState(window.history.state, "", buildProjectHash(projectId));
+  const hash = buildProjectHash(projectId);
+  const url = new URL(window.location.href);
+  const hasEditorPath =
+    editorProjectIdFromPath(url.pathname) !== null || url.pathname === "/editor" || url.pathname === "/editor/";
+  const hasQueryProject = url.searchParams.has("project");
+  if (hasEditorPath || hasQueryProject) {
+    if (hasEditorPath) {
+      url.pathname = `/editor/${encodeURIComponent(projectId)}`;
+    }
+    if (hasQueryProject) {
+      url.searchParams.delete("project");
+    }
+    url.hash = hash;
+    writeWorkspaceHistory(`${url.pathname}${url.search}${url.hash}`, true);
+    return;
+  }
+  writeWorkspaceHistory(hash, true);
+}
+
+/**
+ * Keep `/editor/:projectId` (and any legacy `?project=`) in sync when a valid
+ * `hashchange` switches projects, preserving existing hash query parameters.
+ */
+function syncEditorPath(projectId: string): void {
+  const url = new URL(window.location.href);
+  const currentPathId = editorProjectIdFromPath(url.pathname);
+  const hasQueryProject = url.searchParams.has("project");
+  if (currentPathId === null && !hasQueryProject) return;
+  if (currentPathId !== null) {
+    url.pathname = `/editor/${encodeURIComponent(projectId)}`;
+  }
+  if (hasQueryProject) {
+    url.searchParams.delete("project");
+  }
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  if (nextUrl !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+    writeWorkspaceHistory(nextUrl, true);
+  }
 }
 
 /**
@@ -96,7 +136,10 @@ export function useServerConnection(resolvedProjectId?: string): ServerConnectio
 
   useMountEffect(() => {
     if (resolvedProjectId) return;
-    const hashProjectId = parseProjectIdFromHash(window.location.hash);
+    const hashProjectId =
+      editorProjectIdFromPath(window.location.pathname) ??
+      (new URLSearchParams(window.location.search).get("project") || null) ??
+      parseProjectIdFromHash(window.location.hash);
     let cancelled = false;
     // Explicitly `number` (the DOM return of window.setTimeout) rather than
     // ReturnType<typeof window.setTimeout> — with @types/node present, that infers
@@ -177,6 +220,7 @@ export function useServerConnection(resolvedProjectId?: string): ServerConnectio
         reportHashVerdict("hashchange", verdict);
         if (verdict.outcome !== "missing") {
           setProjectId(next);
+          syncEditorPath(next);
           return;
         }
         const fallbackId = await firstProjectId();

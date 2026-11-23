@@ -67,7 +67,8 @@
     "Frame capture timed out. Please capture again.": "截帧超时，请重新截取。",
     "Content has changed. This step cannot be undone.": "内容已变更，无法撤销这一步",
     "Content has changed. This step cannot be redone.": "内容已变更，无法重做这一步",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "支持的图片格式：PNG、JPG/JPEG、WebP、GIF、AVIF。"
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "支持的图片格式：PNG、JPG/JPEG、WebP、GIF、AVIF。",
+    "Switching projects. Please try again shortly.": "正在切换项目，请稍后重试。"
   },
   "ja": {
     "Uploaded {uploaded}.": "アップロード済み：{uploaded} 件。",
@@ -137,7 +138,8 @@
     "Frame capture timed out. Please capture again.": "フレームのキャプチャがタイムアウトしました。もう一度キャプチャしてください。",
     "Content has changed. This step cannot be undone.": "内容が変更されたため、この操作は元に戻せません。",
     "Content has changed. This step cannot be redone.": "内容が変更されたため、この操作はやり直せません。",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "対応する画像形式：PNG、JPG/JPEG、WebP、GIF、AVIF。"
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "対応する画像形式：PNG、JPG/JPEG、WebP、GIF、AVIF。",
+    "Switching projects. Please try again shortly.": "プロジェクトを切り替え中です。しばらくしてからもう一度お試しください。"
   },
   "ko": {
     "Uploaded {uploaded}.": "업로드됨: {uploaded}개.",
@@ -207,7 +209,8 @@
     "Frame capture timed out. Please capture again.": "프레임 캡처 시간이 초과되었습니다. 다시 캡처해 주세요.",
     "Content has changed. This step cannot be undone.": "내용이 변경되어 이 단계를 실행 취소할 수 없습니다.",
     "Content has changed. This step cannot be redone.": "내용이 변경되어 이 단계를 다시 실행할 수 없습니다.",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "지원하는 이미지 형식: PNG, JPG/JPEG, WebP, GIF, AVIF."
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "지원하는 이미지 형식: PNG, JPG/JPEG, WebP, GIF, AVIF.",
+    "Switching projects. Please try again shortly.": "프로젝트를 전환하는 중입니다. 잠시 후 다시 시도하세요."
   },
   "de": {
     "Uploaded {uploaded}.": "Hochgeladen: {uploaded}.",
@@ -277,7 +280,8 @@
     "Frame capture timed out. Please capture again.": "Zeitüberschreitung bei der Einzelbildaufnahme. Nehmen Sie das Bild erneut auf.",
     "Content has changed. This step cannot be undone.": "Der Inhalt wurde geändert. Dieser Schritt kann nicht rückgängig gemacht werden.",
     "Content has changed. This step cannot be redone.": "Der Inhalt wurde geändert. Dieser Schritt kann nicht wiederholt werden.",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Unterstützte Bildformate: PNG, JPG/JPEG, WebP, GIF und AVIF."
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Unterstützte Bildformate: PNG, JPG/JPEG, WebP, GIF und AVIF.",
+    "Switching projects. Please try again shortly.": "Projekt wird gewechselt. Bitte versuchen Sie es gleich noch einmal."
   },
   "fr": {
     "Uploaded {uploaded}.": "Téléversés : {uploaded}.",
@@ -347,7 +351,8 @@
     "Frame capture timed out. Please capture again.": "La capture de l’image a expiré. Effectuez une nouvelle capture.",
     "Content has changed. This step cannot be undone.": "Le contenu a changé. Cette étape ne peut pas être annulée.",
     "Content has changed. This step cannot be redone.": "Le contenu a changé. Cette étape ne peut pas être rétablie.",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Formats d’image pris en charge : PNG, JPG/JPEG, WebP, GIF et AVIF."
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Formats d’image pris en charge : PNG, JPG/JPEG, WebP, GIF et AVIF.",
+    "Switching projects. Please try again shortly.": "Changement de projet en cours. Veuillez réessayer dans un instant."
   },
   "es": {
     "Uploaded {uploaded}.": "Subidos: {uploaded}.",
@@ -417,7 +422,8 @@
     "Frame capture timed out. Please capture again.": "Se agotó el tiempo de captura del fotograma. Vuelve a capturarlo.",
     "Content has changed. This step cannot be undone.": "El contenido ha cambiado. No se puede deshacer este paso.",
     "Content has changed. This step cannot be redone.": "El contenido ha cambiado. No se puede rehacer este paso.",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Formatos de imagen admitidos: PNG, JPG/JPEG, WebP, GIF y AVIF."
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Formatos de imagen admitidos: PNG, JPG/JPEG, WebP, GIF y AVIF.",
+    "Switching projects. Please try again shortly.": "Cambiando de proyecto. Inténtalo de nuevo en unos momentos."
   },
   "pt-BR": {
     "Uploaded {uploaded}.": "Enviados: {uploaded}.",
@@ -487,7 +493,8 @@
     "Frame capture timed out. Please capture again.": "O tempo de captura do quadro se esgotou. Capture novamente.",
     "Content has changed. This step cannot be undone.": "O conteúdo mudou. Não é possível desfazer esta etapa.",
     "Content has changed. This step cannot be redone.": "O conteúdo mudou. Não é possível refazer esta etapa.",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Formatos de imagem compatíveis: PNG, JPG/JPEG, WebP, GIF e AVIF."
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Formatos de imagem compatíveis: PNG, JPG/JPEG, WebP, GIF e AVIF.",
+    "Switching projects. Please try again shortly.": "Alternando projetos. Tente novamente em instantes."
   },
   "it": {
     "Uploaded {uploaded}.": "Caricati: {uploaded}.",
@@ -557,7 +564,8 @@
     "Frame capture timed out. Please capture again.": "Tempo scaduto per la cattura del fotogramma. Acquisiscilo di nuovo.",
     "Content has changed. This step cannot be undone.": "Il contenuto è cambiato. Impossibile annullare questo passaggio.",
     "Content has changed. This step cannot be redone.": "Il contenuto è cambiato. Impossibile ripetere questo passaggio.",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Formati immagine supportati: PNG, JPG/JPEG, WebP, GIF e AVIF."
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Formati immagine supportati: PNG, JPG/JPEG, WebP, GIF e AVIF.",
+    "Switching projects. Please try again shortly.": "Cambio progetto in corso. Riprova tra un momento."
   },
   "ru": {
     "Uploaded {uploaded}.": "Загружено: {uploaded}.",
@@ -627,7 +635,8 @@
     "Frame capture timed out. Please capture again.": "Время ожидания захвата кадра истекло. Захватите кадр ещё раз.",
     "Content has changed. This step cannot be undone.": "Содержимое изменилось. Этот шаг нельзя отменить.",
     "Content has changed. This step cannot be redone.": "Содержимое изменилось. Этот шаг нельзя повторить.",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Поддерживаемые форматы изображений: PNG, JPG/JPEG, WebP, GIF и AVIF."
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Поддерживаемые форматы изображений: PNG, JPG/JPEG, WebP, GIF и AVIF.",
+    "Switching projects. Please try again shortly.": "Переключение проекта. Повторите попытку чуть позже."
   },
   "tr": {
     "Uploaded {uploaded}.": "Yüklenen: {uploaded}.",
@@ -697,6 +706,7 @@
     "Frame capture timed out. Please capture again.": "Kare yakalama zaman aşımına uğradı. Lütfen yeniden yakalayın.",
     "Content has changed. This step cannot be undone.": "İçerik değişti. Bu adım geri alınamaz.",
     "Content has changed. This step cannot be redone.": "İçerik değişti. Bu adım yeniden uygulanamaz.",
-    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Desteklenen görüntü biçimleri: PNG, JPG/JPEG, WebP, GIF ve AVIF."
+    "Supported image formats: PNG, JPG/JPEG, WebP, GIF and AVIF.": "Desteklenen görüntü biçimleri: PNG, JPG/JPEG, WebP, GIF ve AVIF.",
+    "Switching projects. Please try again shortly.": "Proje değiştiriliyor. Lütfen birazdan tekrar deneyin."
   }
 }

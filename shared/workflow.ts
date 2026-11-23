@@ -48,7 +48,7 @@ export const workflowRegistry = {
       examples: 'skills/openmotion-director/references/examples.md',
     },
   },
-  template: { status: 'ready', sections: { start: 'skills/openmotion-template-to-video/SKILL.md', unchanged: 'skills/openmotion-template-to-video/references/unchanged-export.md', firstuse: 'skills/openmotion-template-to-video/references/first-use.md', recipes: 'skills/openmotion-template-to-video/references/recipes.md' } },
+  template: { status: 'ready', sections: { start: 'skills/openmotion-template-to-video/SKILL.md', unchanged: 'skills/openmotion-template-to-video/references/unchanged-export.md', firstuse: 'skills/openmotion-template-to-video/references/first-use.md', recipes: 'skills/openmotion-template-to-video/references/recipes.md', adaptation: 'skills/openmotion-template-to-video/references/adaptation.md' } },
   recreate: {
     status: 'ready',
     sections: {
@@ -88,6 +88,7 @@ export const workflowRegistry = {
       codex: 'skills/openmotion-media/references/providers/codex.md',
     },
   },
+  game: { status: 'ready', sections: { start: 'skills/openmotion-game/SKILL.md', provenance: 'skills/openmotion-game/PROVENANCE.md', genres: 'skills/openmotion-game/references/game-genres.md', playable: 'skills/openmotion-game/references/game-playable-ad.md', flow: 'skills/openmotion-game/references/game-flow.md', design: 'skills/openmotion-game/references/game-design-system.md', style: 'skills/openmotion-game/references/game-stylization.md', sprites: 'skills/openmotion-game/references/game-2d-animation.md', animation: 'skills/openmotion-game/references/game-3d-animation.md', procedural: 'skills/openmotion-game/references/game-procedural-animation.md', audio: 'skills/openmotion-game/references/game-audio.md', textures: 'skills/openmotion-game/references/game-textures.md', review: 'skills/openmotion-game/references/review-rubric.md' } },
   design: {
     status: 'ready',
     sections: {
@@ -104,9 +105,9 @@ export const workflowRegistry = {
 export const workflowFiles = workflowRegistry.production.sections;
 export const workflowNames = Object.keys(workflowRegistry);
 export const workflowSections = [...new Set(Object.values(workflowRegistry).flatMap(workflow => Object.keys(workflow.sections)))];
-export const phase1WorkflowNames = ['production', 'director', 'template', 'recreate', 'video-to-template', 'media', 'design'];
+export const phase1WorkflowNames = ['production', 'director', 'template', 'recreate', 'video-to-template', 'media', 'design', 'game'];
 export const phase1Skills = ['openmotion-production', 'openmotion-director', 'openmotion-template-to-video', 'openmotion-recreate', 'openmotion-video-to-template'];
-export const supportingSkills = ['openmotion-media', 'openmotion-design'];
+export const supportingSkills = ['openmotion-media', 'openmotion-design', 'openmotion-game'];
 export const packagedSkills = [...phase1Skills, ...supportingSkills];
 export function workflowResources() {
   return Object.entries(workflowRegistry).filter(([name]) => phase1WorkflowNames.includes(name)).flatMap(([workflow, definition]) => Object.keys(definition.sections).map(section => ({

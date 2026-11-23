@@ -80,7 +80,14 @@ test('symlink outputs and a held lock cannot redirect or partially commit a save
   await assert.rejects(source.save(before.revision, [{ id: 'shared/radius-sm', value: '10px' }]), error => error.status === 423);
   await rm(path.join(directory, '.workbench.lock'));
   await rm(path.join(directory, 'studio/tokens.css'));
-  await symlink(path.join(directory, 'tokens.json'), path.join(directory, 'studio/tokens.css'));
+  try {
+    await symlink(path.join(directory, 'tokens.json'), path.join(directory, 'studio/tokens.css'));
+  } catch (error) {
+    // Creating a symlink needs Developer Mode or elevation on Windows. Report the host limit as a
+    // skip instead of a product failure; the guard itself is asserted wherever a link can be made.
+    if (['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) { t.skip(`symlink unavailable on this host (${error.code})`); return; }
+    throw error;
+  }
   await assert.rejects(source.save(before.revision, [{ id: 'shared/radius-sm', value: '10px' }]), error => error.status === 400);
   assert.deepEqual(await readFile(path.join(directory, 'tokens.json')), originalSource);
   assert.equal((await readdir(directory)).some(file => file.startsWith('.workbench')), false);

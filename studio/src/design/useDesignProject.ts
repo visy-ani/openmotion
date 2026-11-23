@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DesignComment, DesignEditorApp, DesignProjectDetail, DesignVersion } from '../../../shared/design-project';
+import { useVisibilityPolling } from '../hooks/useVisibilityPolling';
 import { designClient } from './designClient';
 
 export type DesignProjectState = {
@@ -57,21 +58,16 @@ export function useDesignProject(projectId: string): DesignProjectState {
     designClient.detectEditors().then(res => setEditors(res.editors)).catch(() => setEditors([]));
   }, [loadAll]);
 
-  useEffect(() => {
-    let active = true;
-    const tick = async () => {
-      if (!active || document.visibilityState !== 'visible') return;
-      try {
-        const state = await designClient.getState(projectId);
-        if (!active) return;
-        if (state.revision !== revRef.current || state.openComments !== commentsCountRef.current) {
-          await loadAll(true);
-        }
-      } catch { /* transient poll failure */ }
-    };
-    const timer = window.setInterval(tick, 2500);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [projectId, loadAll]);
+  useVisibilityPolling(
+    async signal => {
+      const state = await designClient.getState(projectId);
+      if (signal.aborted) return;
+      if (state.revision !== revRef.current || state.openComments !== commentsCountRef.current) {
+        await loadAll(true);
+      }
+    },
+    { enabled: Boolean(projectId), intervalMs: 2500, immediate: false, resetKey: projectId },
+  );
 
   return {
     project, versions, currentVersionId, comments, editors, loading, error,

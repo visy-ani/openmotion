@@ -66,8 +66,12 @@ export function modelReferenceLimit(model: Model): number {
   if (model.modality === 'image' && model.supportsImageReference) {
     if (model.provider === 'codex') return 1;
     const cap = ['opendesign', 'account'].includes(model.provider) ? openDesignImageReferenceCap(model.modelId) : undefined;
-    // Account catalogues saved before their max_input_images was kept fall back to the measured limit.
-    return Math.min(model.maxInputImages ?? (model.provider === 'account' ? cap : undefined) ?? 1, cap ?? Infinity);
+    // Earlier Cloud syncs persisted a synthetic maxInputImages: 1 when nativeOptions omitted max_input_images.
+    const syntheticCloudFallback = model.provider === 'opendesign' && model.maxInputImages === 1
+      && Boolean(model.nativeOptions) && !(Number.isInteger(model.nativeOptions?.max_input_images) && (model.nativeOptions!.max_input_images as number) > 0);
+    const declared = syntheticCloudFallback ? undefined : model.maxInputImages;
+    // OpenDesign catalogues without an explicit max_input_images fall back to the measured limit (unknown models stay at 1).
+    return Math.min(declared ?? cap ?? 1, cap ?? Infinity);
   }
   return model.modality === 'video' ? Math.min(model.maxInputImages ?? 0, 1) : 0;
 }

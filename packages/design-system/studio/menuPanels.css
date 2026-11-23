@@ -60,6 +60,13 @@
   color: var(--studio-menu-item-ink, var(--motion-strong));
 }
 
+/* Image picker popups live in a portal outside the composer. */
+:root[data-motion-ui][data-motion-studio]:not([data-theme="paper"]) .om-image-form-popup [role="option"]:not(
+  :disabled, [data-disabled], [aria-disabled="true"]
+):is(:hover, :focus-visible, [data-highlighted], [aria-selected="true"]) {
+  background-color: var(--motion-neutral-n11);
+}
+
 [data-menu-panel] :is(button, [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"]):is(:disabled, [data-disabled], [aria-disabled="true"]) {
   color: var(--motion-control-disabled);
   background: transparent;

@@ -1,0 +1,99 @@
+name: Desktop Release Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish packaged desktop installers to GitHub Releases
+        required: false
+        type: boolean
+        default: false
+      channel:
+        description: Desktop release channel
+        required: false
+        type: choice
+        default: beta
+        options:
+          - stable
+          - beta
+
+permissions:
+  contents: write
+
+jobs:
+  build-desktop:
+    name: Build Desktop (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS (arm64 + x64)
+            os: macos-15
+            pack_cmd: npm run desktop:pack:mac
+            artifact_name: openmotion-desktop-macos
+          - label: Windows (x64 + arm64)
+            os: windows-latest
+            pack_cmd: npm run desktop:pack:win
+            artifact_name: openmotion-desktop-windows
+          - label: Linux (x64 + arm64)
+            os: ubuntu-24.04
+            pack_cmd: npm run desktop:pack:linux
+            artifact_name: openmotion-desktop-linux
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '26.11.1'
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install desktop Electron dependencies
+        run: npm --prefix desktop install --no-audit --no-fund
+
+      - name: Run Studio and backend checks
+        run: |
+          npm run check
+          npm run typecheck:backend
+          npm run typecheck:studio
+
+      - name: Build Studio and Desktop shell
+        run: |
+          npm run build:studio
+          npm run desktop:build
+          npm run desktop:test
+          npm --prefix desktop run typecheck
+
+      - name: Package desktop installers
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: ${{ matrix.pack_cmd }}
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
+            desktop/release/*.exe
+            desktop/release/*.AppImage
+            desktop/release/*.deb
+            desktop/release/*.rpm
+            desktop/release/*.yml
+            desktop/release/*.blockmap
+          if-no-files-found: error
+
+      - name: Publish installers to GitHub Release (optional)
+        if: inputs.publish && github.repository == 'nexu-io/openmotion'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Publishing channel ${{ inputs.channel }} installers"
+          gh release upload "desktop-v$(node -p "require('./desktop/package.json').version")" desktop/release/*.dmg desktop/release/*.zip desktop/release/*.exe desktop/release/*.AppImage desktop/release/*.deb desktop/release/*.rpm desktop/release/*.yml --clobber

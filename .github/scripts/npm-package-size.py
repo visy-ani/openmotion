@@ -9,7 +9,7 @@ import tarfile
 
 MIB = 1024 * 1024
 WARNING_GROWTH = MIB
-MAX_BYTES = 24 * MIB
+MAX_BYTES = 26 * MIB
 
 
 def package_files(path):

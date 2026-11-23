@@ -15,12 +15,12 @@
 
 .hf-toast-viewport,
 [data-motion-ui] .motion-inline-toast {
-  --toast-top: var(--motion-space-64);
+  --toast-top: calc(var(--motion-topbar, 48px) + var(--motion-space-12));
 }
 
 .hf-toast-viewport {
   position: absolute;
-  top: calc(var(--toast-top) - var(--motion-space-24));
+  top: calc(var(--toast-top) - var(--motion-space-16));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -28,9 +28,9 @@
   align-items: center;
   gap: var(--motion-space-8);
   box-sizing: border-box;
-  width: min(calc(420px + 2 * var(--motion-space-24)), 100%);
-  padding: var(--motion-space-24);
-  max-height: calc(100dvh - var(--toast-top) + var(--motion-space-24));
+  width: min(calc(420px + 2 * var(--motion-space-32)), 100%);
+  padding: var(--motion-space-16) var(--motion-space-32) var(--motion-space-40);
+  max-height: calc(100dvh - var(--toast-top) + var(--motion-space-16));
   overflow-y: auto;
   overscroll-behavior-y: contain;
   pointer-events: none;
@@ -45,25 +45,49 @@
   align-items: center;
   flex-shrink: 0;
   gap: var(--motion-space-4);
-  padding: var(--motion-space-4);
+  padding: var(--motion-space-4) var(--motion-space-6);
   border-radius: var(--motion-radius-sm);
   color: inherit;
   cursor: pointer;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-out),
+    transform var(--motion-duration-control) var(--motion-ease-out);
 }
-.hf-toast-action:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+.hf-toast-action:hover { background: var(--motion-hover); }
+.hf-toast-action:active { transform: scale(0.96); }
 .hf-toast-action:focus-visible { outline: 1px solid var(--motion-focus); outline-offset: 1px; }
 .hf-toast-action:disabled { opacity: .5; cursor: default; }
 
 .hf-toast-surface,
 [data-motion-ui] .motion-inline-toast {
-  padding: var(--motion-space-8) var(--motion-space-16);
-  border: 0;
-  border-radius: var(--motion-radius-xl);
-  background: var(--motion-strong);
-  color: var(--motion-panel);
-  box-shadow: var(--motion-shadow-lg);
-  font: var(--motion-weight-regular) var(--motion-text-sm)/var(--motion-space-20) var(--motion-font-sans);
+  padding: var(--motion-space-8) var(--motion-space-14);
+  border: 1px solid var(--motion-border);
+  border-radius: var(--motion-radius-step-14);
+  background: var(--motion-raised);
+  color: var(--motion-strong);
+  box-shadow: var(--motion-shadow-md);
+  font: var(--motion-weight-medium) var(--motion-text-sm)/var(--motion-space-20) var(--motion-font-sans);
   overflow-wrap: anywhere;
+}
+
+.hf-toast-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--motion-space-8);
+}
+
+.hf-toast-icon {
+  flex-shrink: 0;
+  color: var(--motion-accent);
+}
+
+[data-toast-tone="error"] .hf-toast-surface {
+  border-color: color-mix(in srgb, var(--motion-danger) 40%, var(--motion-border));
+}
+
+[data-toast-tone="error"] .hf-toast-icon {
+  color: var(--motion-danger);
 }
 
 [data-motion-ui] .motion-inline-toast {

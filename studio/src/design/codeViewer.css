@@ -1,0 +1,83 @@
+/* Shared syntax-highlighted code viewer styles — strictly consumes packages/design-system tokens. */
+
+.om-design-code-pre,
+.om-design-code-editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  padding: var(--motion-space-10) 0 var(--motion-space-16);
+  overflow: auto;
+  font-family: var(--motion-font-mono);
+  font-size: var(--motion-text-xs);
+  line-height: 1.7;
+  background: var(--motion-bg);
+  color: var(--motion-text);
+  border: 0;
+  resize: none;
+  tab-size: 2;
+}
+
+.om-design-code-pre > code {
+  display: block;
+  min-width: max-content;
+}
+
+.om-design-code-editor {
+  padding: var(--motion-space-16);
+}
+
+.om-design-code-line {
+  display: flex;
+  align-items: baseline;
+  min-width: 100%;
+  padding: 0 var(--motion-space-16) 0 0;
+}
+
+.om-design-code-line:hover {
+  background: color-mix(in srgb, var(--motion-text) 4%, transparent);
+}
+
+.om-design-code-ln {
+  width: 48px;
+  padding-right: var(--motion-space-12);
+  margin-right: var(--motion-space-12);
+  border-right: 1px solid color-mix(in srgb, var(--motion-border-subtle) 55%, transparent);
+  text-align: right;
+  user-select: none;
+  color: var(--motion-muted);
+  opacity: 0.58;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.om-design-code-text {
+  white-space: pre;
+}
+
+.om-design-tok-tag {
+  color: var(--motion-accent);
+  font-weight: var(--motion-weight-medium);
+}
+
+.om-design-tok-attr {
+  color: color-mix(in srgb, var(--motion-warning) 78%, var(--motion-text));
+}
+
+.om-design-tok-string {
+  color: var(--motion-success);
+}
+
+.om-design-tok-comment {
+  color: var(--motion-muted);
+  font-style: italic;
+}
+
+.om-design-tok-keyword {
+  color: var(--motion-warning);
+  font-weight: var(--motion-weight-medium);
+}
+
+.om-design-tok-number {
+  color: color-mix(in srgb, var(--motion-accent) 82%, var(--motion-text));
+}

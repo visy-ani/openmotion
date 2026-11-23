@@ -1,4 +1,4 @@
-import { generationOptions, compatibleImageResolutions } from '../../../shared/generation-options';
+import { generationOptions } from '../../../shared/generation-options';
 import type { Model, ProviderState } from '../../../shared/gateway';
 import { providerRegistry, registeredProvider } from '../../../shared/provider-registry';
 import { openDesignImageReferenceCap, openDesignModelLabel, openDesignModels } from '../../../shared/opendesign-models';
@@ -49,7 +49,8 @@ export function providerDisplayName(providerId: string, providers: ProviderState
   return providers.find(provider => provider.id === providerId)?.label ?? registeredProvider(providerId)?.label ?? providerId;
 }
 
-/** OpenDesign Cloud (API key) first, then the OpenDesign account, then the settings order of built-in providers. */
+/** OpenDesign Cloud (API key) first, then the OpenDesign account, then the settings order of built-in providers.
+ * CreationModelPicker lifts a ready OpenDesign route ahead of an unready one while keeping OpenDesign first. */
 const openDesignOrder = ['opendesign', 'account'];
 export function providerRank(providerId: string) {
   const openDesign = openDesignOrder.indexOf(providerId);
@@ -111,28 +112,7 @@ export function menuFamilies(models: Model[], providers: ProviderState[]) {
     .sort((a, b) => Math.min(...a.variants.map(menuRank)) - Math.min(...b.variants.map(menuRank)));
 }
 
-/** 2K output is measured on Seedream 5.0 Flash first, then Seedream 5.5. */
-const hdPreference = ['seedream-5.0-flash', 'seedream-5.5'];
-const hdRank = (model: Model) => { const index = hdPreference.indexOf(model.modelId); return index < 0 ? hdPreference.length : index; };
-
 export function imageMenuModels(models: Model[], providers: ProviderState[]) {
   const listed = withOpenDesignModels(models, providers);
-  const rows = menuFamilies(listed.filter(model => supportsScene(model, imageScene)), providers);
-  // Features run only on OpenDesign models, so their 2K preset must come from one of them.
-  const hd = listed.filter(model => isOpenDesignProvider(model.provider) && supportsScene(model, imageScene)).flatMap((model): { model: Model; parameters: Record<string, unknown> }[] => {
-    const fields = (model.generationOptions ?? generationOptions(model))?.fields ?? [];
-    const size = fields.find(field => field.key === 'size')?.choices?.find(choice => String(choice.value).toUpperCase() === '2K');
-    if (size) return [{ model, parameters: { size: size.value } }];
-    const resolution = fields.find(field => field.key === 'resolution')?.choices?.find(choice => String(choice.value).toUpperCase() === '2K');
-    if (!resolution) return [];
-    const aspect = fields.find(field => field.key === 'aspect_ratio');
-    const defaultAspect = model.defaults?.aspect_ratio ?? aspect?.default;
-    const allowed = compatibleImageResolutions(model, defaultAspect);
-    const alternate = allowed && !allowed.includes(String(resolution.value))
-      ? aspect?.choices?.find(choice => compatibleImageResolutions(model, choice.value)?.includes(String(resolution.value)))?.value
-      : undefined;
-    return [{ model, parameters: { resolution: resolution.value, ...(alternate === undefined ? {} : { aspect_ratio: alternate }) } }];
-  }).sort((a, b) => Number(providerReady(providers, b.model.provider)) - Number(providerReady(providers, a.model.provider))
-    || hdRank(a.model) - hdRank(b.model) || familyIndex(a.model) - familyIndex(b.model) || providerRank(a.model.provider) - providerRank(b.model.provider))[0];
-  return { rows, hd: hd ?? null };
+  return menuFamilies(listed.filter(model => supportsScene(model, imageScene)), providers);
 }

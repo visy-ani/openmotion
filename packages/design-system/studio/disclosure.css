@@ -76,10 +76,47 @@
   color: inherit;
 }
 
+/* Sidebar footer actions match DisclosureRow geometry and opaque chrome states. */
+:root[data-motion-ui][data-motion-studio] .motion-sidebar-footer .om-nav-item {
+  width: 100%;
+  min-height: var(--studio-disclosure-row-height);
+  padding: var(--motion-space-6) var(--motion-space-12);
+  gap: var(--motion-space-10);
+  border-radius: var(--motion-radius-xl);
+  font-weight: var(--motion-weight-medium);
+  color: light-dark(var(--motion-neutral-n8), var(--motion-neutral-n5));
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-out), color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+:root[data-motion-ui][data-motion-studio] .motion-sidebar-footer .om-nav-item > svg {
+  flex-shrink: 0;
+  color: var(--motion-chrome-icon);
+  transition: color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+:root[data-motion-ui][data-motion-studio] .motion-sidebar-footer .om-nav-item:not(:disabled):hover {
+  color: var(--motion-strong);
+  background: var(--motion-chrome-hover);
+}
+
+:root[data-motion-ui][data-motion-studio] .motion-sidebar-footer .om-nav-item:not(:disabled):is(:active, [data-active="true"], [aria-expanded="true"], [aria-current="page"]) {
+  color: var(--motion-strong);
+  background: var(--motion-chrome-active);
+}
+
+:root[data-motion-ui][data-motion-studio] .motion-sidebar-footer .om-nav-item:not(:disabled):is(:hover, :active, [data-active="true"], [aria-expanded="true"], [aria-current="page"]) > svg {
+  color: currentColor;
+}
+
+:root[data-motion-ui][data-motion-studio] .motion-sidebar-footer .om-nav-item:focus-visible {
+  outline: 1px solid var(--studio-form-focus);
+  outline-offset: -1px;
+}
+
 @media (hover: none) {
   [data-motion-studio] .om-disclosure-row-action { opacity: 1; pointer-events: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-motion-studio] :is(.om-disclosure-row, .om-disclosure-row-action) { transition: none; }
+  [data-motion-studio] :is(.om-disclosure-row, .om-disclosure-row-action, .motion-sidebar-footer .om-nav-item, .motion-sidebar-footer .om-nav-item > svg) { transition: none; }
 }

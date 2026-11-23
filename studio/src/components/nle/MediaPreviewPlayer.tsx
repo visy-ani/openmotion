@@ -7,6 +7,7 @@ import { VolumeControl } from "../../player/components/VolumeControl";
 import { SpeedMenu } from "../../player/components/SpeedMenu";
 import { formatTime } from "../../player/lib/time";
 import { usePlayerStore } from "../../player/store/playerStore";
+import { releaseMediaElement } from "../../utils/releaseMediaElement";
 import { AudioPreviewWaveform } from "./AudioPreviewWaveform";
 import "./audioPreview.css";
 
@@ -31,6 +32,10 @@ export function MediaPreviewPlayer({ url, kind, name, autoPlay = true, waveform,
     media.current.muted = muted;
     media.current.playbackRate = rate;
   }, [volume, muted, rate]);
+  useEffect(() => {
+    const element = media.current;
+    return () => releaseMediaElement(element);
+  }, [url, kind, failed]);
   const toggle = () => {
     if (!media.current) return;
     if (media.current.paused) void media.current.play().catch(() => setPlaying(false));

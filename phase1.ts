@@ -1,3 +1,4 @@
+import { dispatchGameTool } from './game-projects.ts';
 import { ToolInputError } from './shared/tool-input-error.ts';
 import { assetImportError, toolFailureFields } from './tracking/tool-fields.ts';
 import { readProjectAssetNames } from './project-asset-names.ts';
@@ -18,7 +19,13 @@ import { loadCanvasSourceOperations } from './shared/composition-canvas-source.t
 import { loadCaptionSourceOperations } from './shared/transcript-captions.ts';
 import { brandKitOperation } from './gateway/brand-kit-operation.ts';
 import { brandKitsFor } from './gateway/brand-kits.ts';
-import { dispatchDesignTool } from './design-projects.ts';
+import { AssetLibrary } from './gateway/asset-library.ts';
+import { scenarioOperation, scenarioRunsFor } from './gateway/scenario-runs.ts';
+import { contentBatchOperation, contentBatchesFor } from './gateway/content-batch.ts';
+import { triggerOperation, triggersFor } from './gateway/triggers.ts';
+import { webPublishOperation } from './gateway/web-publish-ops.ts';
+import { createAutomationHost } from './gateway/automation-host.ts';
+import { designProjectsFor, dispatchDesignTool } from './design-projects.ts';
 import { MAX_ASSET_BYTES, isAssetFileWithinLimit } from './shared/asset-limits.ts';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -33,6 +40,7 @@ import { getTemplate } from './template-catalog.ts';
 import { execute, inspectProject, pluginRoot } from './hyperframes.ts';
 import { verificationBinaries } from './scripts/verify-export.ts';
 import { validateInstruction } from './shared/conversation.ts';
+import { editorProjectIdFromPath } from './shared/spa-routes.ts';
 import { sessionPath, templateLibraryPreview, providerSettingsPreview } from './shared/workspace-url.ts';
 import { phase1Tools, validateInput } from './shared/phase1-tools.ts';
 import { atomicJson, cloneFile, fileHash, jsonFile, ProjectVersions, recoverProjectTransactions } from './phase1-versions.ts';
@@ -327,7 +335,11 @@ export class Phase1Service {
     const target = new URL(this.context.origin() + sessionPath(detail.sessionId, detail.projectId, { embedded: true }));
     let observed: URL;
     try { observed = new URL(display.previewUrl); } catch { throw new Error('PREVIEW_TARGET_MISMATCH'); }
-    if (observed.origin !== target.origin || observed.pathname !== target.pathname || observed.searchParams.get('project') !== detail.projectId ||
+    const queryProject = observed.searchParams.get('project');
+    const observedProject = editorProjectIdFromPath(observed.pathname) ?? queryProject;
+    const validPath = observed.pathname === target.pathname || (observed.pathname === '/' && queryProject === detail.projectId);
+    if (observed.origin !== target.origin || !validPath || observedProject !== detail.projectId ||
+        (queryProject !== null && queryProject !== detail.projectId) ||
         observed.searchParams.get('session') !== detail.sessionId || observed.username || observed.password ||
         observed.hash.split('?')[0] !== target.hash) throw new Error('PREVIEW_TARGET_MISMATCH');
     const record = { ...display, projectId: detail.projectId, source: 'host_reported', requestId: args.requestId, recordedAt: Date.now() };
@@ -373,8 +385,9 @@ export class Phase1Service {
     return { projectId: args.projectId, review: record, changed: false };
   }
   async dispatch(name: string, args: any, host?: HostContext): Promise<any> {
+    if (name.startsWith('motion_game_')) return dispatchGameTool(name, args, this.store.directory, this.runtimeRoot);
     if (name === 'motion_design_catalog' || name === 'motion_design_project' || name === 'motion_design_edit' || name === 'motion_design_comments') {
-      return dispatchDesignTool(name, args, this.store.directory, this.context.origin());
+      return dispatchDesignTool(name, args, this.store.directory, this.context.origin(), ref => new AssetLibrary(this.store).resolve(ref));
     }
     if (name === 'motion_manage_project') return manageProject(this.store, args, this.runtimeRoot);
     if (name === 'motion_project_archive') {
@@ -383,6 +396,37 @@ export class Phase1Service {
     }
     if (name === 'motion_assets') {
       if (args.action === 'brand_kit') return brandKitOperation(brandKitsFor(this.store.directory), args.brandKit, this.context.origin());
+      if (args.action === 'scenario') {
+        return scenarioOperation(scenarioRunsFor(this.store), args.scenario, {
+          origin: () => this.context.origin(),
+          assets: input => assetOperation(this.store, input, (i, o) => this.importAssets(i, o), this.context.tracking),
+          design: designProjectsFor(this.store.directory),
+          resolveAsset: ref => new AssetLibrary(this.store).resolve(ref),
+          createMotionProject: input => this.dispatch('motion_create_project', input),
+          exportMotionArchive: input => projectArchive(this.store, input, this.runtimeRoot),
+        });
+      }
+      if (args.action === 'batch') {
+        const host = createAutomationHost({
+          store: this.store,
+          origin: this.context.origin,
+          phase1: () => this,
+          runtimeRoot: this.runtimeRoot,
+        });
+        return contentBatchOperation(contentBatchesFor(this.store), args.batch, host);
+      }
+      if (args.action === 'trigger') {
+        const host = createAutomationHost({
+          store: this.store,
+          origin: this.context.origin,
+          phase1: () => this,
+          runtimeRoot: this.runtimeRoot,
+        });
+        return triggerOperation(triggersFor(this.store), args.trigger, host);
+      }
+      if (args.action === 'web_publish') {
+        return webPublishOperation(this.store, args.webPublish, this.context.origin());
+      }
       if (args.action === 'transcript') {
         const input = args.transcript;
         if (input.command === 'caption_tracks' || input.command === 'caption_export') {

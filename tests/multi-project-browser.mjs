@@ -6,6 +6,7 @@ import puppeteer from 'puppeteer-core';
 import { Client } from './shared-editor-client.mjs';
 import { closeFixtureEditor, fixture } from './fixtures.ts';
 import { ensureEditor } from '../editor-runtime.ts';
+import { editorProjectIdFromPath } from '../shared/spa-routes.ts';
 
 const out = process.argv[2]; assert.ok(out && path.isAbsolute(out), 'Pass an absolute evidence directory');
 await mkdir(out, { recursive: true });
@@ -59,7 +60,7 @@ try {
   };
   for (const [i, page] of pages.entries()) await waitForFilm(page, projects[i].projectId, ['PROJECT A', 'PROJECT B'][i]);
   await new Promise(resolve => setTimeout(resolve, 2400));
-  for (const [i, page] of pages.entries()) assert.equal(new URL(page.url()).searchParams.get('project'), projects[i].projectId);
+  for (const [i, page] of pages.entries()) assert.equal(editorProjectIdFromPath(new URL(page.url()).pathname), projects[i].projectId);
   check('two live previews and timelines retain their own project after global selection and status polling');
   const currentA = await clients[0].call('openmotion_get_project', { projectId: projects[0].projectId });
   await clients[0].call('openmotion_edit_project', { projectId: projects[0].projectId, requestId: 'update-a', expectedRevision: currentA.revision, expectedVersionId: currentA.currentVersionId, files: [{ path: 'index.html', content: film('PROJECT A UPDATED', 1) }] });
@@ -67,7 +68,7 @@ try {
   await waitForFilm(pages[1], projects[1].projectId, 'PROJECT B');
   await clients[0].call('openmotion_open_preview', { projectId: projects[0].projectId });
   await new Promise(resolve => setTimeout(resolve, 2200));
-  assert.equal(new URL(pages[1].url()).searchParams.get('project'), projects[1].projectId);
+  assert.equal(editorProjectIdFromPath(new URL(pages[1].url()).pathname), projects[1].projectId);
   assert.deepEqual(foreignRequests, []);
   check('MCP edits refresh A preview and timeline without changing B URL, content or request targets');
   const origin = new URL(projects[1].previewUrl).origin;
@@ -98,7 +99,7 @@ try {
       await coldPage.setViewport({ width: 1440, height: 1000 });
       await coldPage.goto(new URL('/#project/' + a, editor.endpoint).href, { waitUntil: 'domcontentloaded' });
       await waitForFilm(coldPage, a, 'COLD BOOKMARK A');
-      assert.equal(new URL(coldPage.url()).searchParams.get('project'), a);
+      assert.equal(editorProjectIdFromPath(new URL(coldPage.url()).pathname), a);
       assert.equal(await readFile(path.join(store.projectDirectoryFor(b), 'index.html'), 'utf8'), sourceB);
       assert.equal((await store.forProject(b).get()).revision, before.revision);
       assert.equal(store.projectCatalog().activeId, b);

@@ -89,6 +89,14 @@ export function buildBridgeSrcDoc(rawHtml: string, baseHref: string, token: stri
 
   function describe(el) {
     const rect = el.getBoundingClientRect();
+    const computed = getComputedStyle(el);
+    const styleKeys = ['display', 'position', 'width', 'height', 'color', 'backgroundColor', 'fontSize', 'fontWeight', 'fontFamily', 'padding', 'margin', 'borderRadius', 'gap', 'zIndex'];
+    const styles = {};
+    for (let i = 0; i < styleKeys.length; i++) {
+      const k = styleKeys[i];
+      if (computed[k]) styles[k] = String(computed[k]);
+    }
+    const classes = Array.from(el.classList || []).filter(c => !c.startsWith('om-')).slice(0, 6);
     const tagName = el.tagName.toLowerCase();
     const text = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 240);
     const label = el.getAttribute('aria-label') || (text ? text.slice(0, 48) : tagName);
@@ -96,8 +104,10 @@ export function buildBridgeSrcDoc(rawHtml: string, baseHref: string, token: stri
       selector: cssPath(el),
       elementId: el.id || undefined,
       tagName,
+      classes: classes.length ? classes : undefined,
       label,
       text: text || undefined,
+      styles,
       htmlHint: (el.outerHTML || '').slice(0, 320),
       box: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
     };

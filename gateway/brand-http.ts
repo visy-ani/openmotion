@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { attachmentDisposition } from "../shared/http-header.ts";
 import { randomBytes } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from 'node:path';
@@ -138,9 +139,9 @@ export async function brandKitHttp(
       if (filename.endsWith(".zip"))
         res.setHeader(
           "Content-Disposition",
-          `attachment; filename="brand-kit-${id}.zip"`,
+          attachmentDisposition(`brand-kit-${id}.zip`),
         );
-      if (filename.startsWith("context/")) res.setHeader("Content-Disposition", `attachment; filename="${path.basename(filename)}"`);
+      if (filename.startsWith("context/")) res.setHeader("Content-Disposition", attachmentDisposition(path.basename(filename)));
       res.setHeader("Accept-Ranges", "bytes");
       let start = 0,
         end = info.size - 1,

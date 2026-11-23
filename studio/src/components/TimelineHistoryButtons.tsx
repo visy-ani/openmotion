@@ -4,7 +4,7 @@ import { useStudioShellContextOptional } from "../contexts/StudioContext";
 import { RotateCcw, RotateCw } from "../icons/SystemIcons";
 import { trackStudioEvent } from "../utils/studioTelemetry";
 import { historyEntryLabel } from '../i18n/historyMessages';
-import { getHistoryShortcutLabel } from '../utils/studioHelpers';
+import { getHistoryShortcutLabel } from '../utils/historyShortcuts';
 import { flatBtn, flatDisabled, flatIdle } from "./timelineToolbarStyles";
 import { Tooltip } from "./ui";
 import { clickMethod, noteHistoryTrigger } from "../motion/editorTracking";

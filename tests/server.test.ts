@@ -106,3 +106,61 @@ test('container connection instructions launch Docker on the host, preserving th
     else process.env.MOTION_CONTAINER_NAME = previous;
   }
 }));
+
+test('SPA route allowlist serves Studio HTML while reserved backend and unknown paths never fall back', () => fixture(async store => {
+  let ensureCalls = 0;
+  const request = transport(store, {
+    ensureStudio: async () => { ensureCalls++; throw new Error('Native project unavailable'); },
+  });
+  for (const route of ['/explore', '/cinema', '/cinema/text-to-video', '/design/prototype', '/design/projects/d-1', '/sound', '/audio/sfx', '/create/text-to-image', '/studios/3d', '/studios/game?game=done', '/settings/providers?project=project', '/mcp-setup?project=project', '/brand-kit/mine', '/model-hub/gemini-4', '/models/veo-3', '/skills/manim', '/scenarios', '/scenarios/black-friday', '/assets', '/assets/a-1']) {
+    const response = await request(route);
+    assert.equal(response.status, 200, `expected 200 for SPA route ${route}`);
+    assert.match(await response.text(), /data-motion-studio/);
+  }
+  // Standalone SPA routes must not trigger native Studio startup even when ?project is attached.
+  assert.equal(ensureCalls, 0);
+
+  // The live MCP stream is open-ended. An unknown session exercises its
+  // routing with a finite response that the in-memory transport can read.
+  const mcp = await request('/mcp', { headers: { 'Mcp-Session-Id': 'unknown-session' } });
+  assert.equal(mcp.status, 404);
+  assert.deepEqual(await mcp.json(), { error: 'MCP session not found' });
+
+  // Reserved backend and unknown paths must never return SPA HTML.
+  for (const route of ['/mcp/stream', '/unknown-page', '/workspace.ts']) {
+    const response = await request(route);
+    assert.equal(response.status, 404, `expected 404 for ${route}`);
+  }
+  const missingAsset = await request('/editor-assets/missing.js');
+  assert.equal(missingAsset.status, 503);
+  assert.doesNotMatch(await missingAsset.text(), /data-motion-studio/);
+  assert.equal((await request('/api/unknown')).status, 503);
+
+  // Explicit editor path triggers native Studio pre-launch.
+  assert.equal((await request('/editor/project')).status, 400);
+  assert.equal(ensureCalls, 1);
+}));
+test('download headers sanitise the plain name and keep the exact name encoded', async () => {
+  const { attachmentDisposition, encodedFilename, plainFilename } = await import('../shared/http-header.ts');
+  assert.equal(attachmentDisposition('clip.mp4'), 'attachment; filename="clip.mp4"; filename*=UTF-8\'\'clip.mp4');
+  // A quote or backslash must not survive into the header value; CRLF never reaches Node.
+  const hostile = attachmentDisposition('a"b\\c.mp4');
+  assert.ok(!hostile.includes('"a"b'), hostile);
+  assert.match(hostile, /filename="a_b_c\.mp4"/);
+  // Non-ASCII collapses in the plain parameter but survives percent-encoded.
+  const unicode = attachmentDisposition('\u89c6\u9891.mp4');
+  assert.match(unicode, /filename="_+\.mp4"/);
+  assert.match(unicode, /filename\*=UTF-8''%E8%A7%86%E9%A2%91\.mp4/);
+  // RFC 5987 attr-char excludes these delimiters, so they must be percent-encoded.
+  for (const character of ["'", '(', ')', '*']) {
+    assert.equal(encodedFilename(character), '%' + character.charCodeAt(0).toString(16).toUpperCase());
+  }
+  // `!` is an allowed attr-char, but the shared encoder escapes the whole delimiter set
+  // so one rule covers every caller; percent-encoding an allowed character stays valid.
+  assert.equal(encodedFilename('!'), '%21');
+  // An explicit plain-name override is sanitised too, so a caller cannot bypass the rule.
+  const overridden = attachmentDisposition('real"name.mp4', 'generic"name.mp4');
+  assert.match(overridden, /filename="generic_name\.mp4"/);
+  assert.match(overridden, /filename\*=UTF-8''real%22name\.mp4/);
+  assert.equal(plainFilename('a"b\\c'), 'a_b_c');
+});

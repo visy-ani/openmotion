@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { MotionEditorFrame, MotionStudioHost } from './MotionStudioHost';
+import { preloadAllWorkspacePages } from '../router/lazyPages';
 import { translate } from '../i18n/I18n';
 import englishReadme from '../../../README.md?raw';
 import chineseReadme from '../../../README.zh-CN.md?raw';
@@ -27,6 +28,8 @@ vi.mock('./ExploreStudios', async () => {
 vi.mock('./SettingsCenter', () => ({
   SettingsCenter: ({ onBack }: { onBack: () => void }) => <section data-testid="settings-center"><button type="button" onClick={onBack}>返回</button></section>,
 }));
+
+beforeAll(() => preloadAllWorkspacePages());
 
 const state = vi.hoisted(() => ({
   connectionError: '',
@@ -115,7 +118,7 @@ it('shows a restore failure once in its own project through the shared toast', (
   expect(state.showToast).toHaveBeenCalledTimes(2);
 });
 
-it('keeps project switching, templates, history actions and native export in the MVP', () => {
+it('keeps project switching, templates, history actions and native export in the MVP', async () => {
   render();
   const header = container.querySelector('.motion-studio-header')!;
   expect(header.querySelector('.motion-workspace-menu')).toBeNull();
@@ -159,8 +162,8 @@ it('keeps project switching, templates, history actions and native export in the
   act(() => project.click());
   expect(state.open).toHaveBeenCalledWith('projects', 'second');
   expect(trackMotion).toHaveBeenCalledWith('ui_click', expect.objectContaining({ page_name: 'studio', area: 'workspace', element: 'open_project' }));
-  act(() => container.querySelector<HTMLButtonElement>('.om-app-brand')!.click());
-  act(() => button('Browse templates').click());
+  await act(async () => container.querySelector<HTMLButtonElement>('.om-app-brand')!.click());
+  await act(async () => button('Browse templates').click());
   expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1);
   expect(container.querySelector('[role="dialog"]')!.getAttribute('data-section')).toBe('templates');
   act(() => button('Open Product Promo').click());

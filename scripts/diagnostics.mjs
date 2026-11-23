@@ -93,13 +93,13 @@ export async function recordDiagnostic(directory, event) {
 
 /**
  * Collect a redacted diagnostics bundle for one installation.
- * @param {{ appRoot?: string, dataDirectory?: string, installHome?: string, browserErrors?: unknown[] }} [options]
+ * @param {{ appRoot?: string, dataDirectory?: string, installHome?: string, desktopLogDirectory?: string, browserErrors?: unknown[] }} [options]
  */
-export async function collectDiagnostics({ appRoot = appDirectory, dataDirectory, installHome, browserErrors = [] } = {}) {
+export async function collectDiagnostics({ appRoot = appDirectory, dataDirectory, installHome, desktopLogDirectory = process.env.MOTION_DESKTOP_LOG_DIR || undefined, browserErrors = [] } = {}) {
   const entries = [], files = [];
   let remaining = diagnosticLimits.totalBytes;
   let logRemaining = diagnosticLimits.logBytes;
-  const paths = [os.homedir(), appRoot, dataDirectory, installHome];
+  const paths = [os.homedir(), appRoot, dataDirectory, installHome, desktopLogDirectory];
   const clean = text => redactDiagnostic(text, process.env, paths);
   const add = (name, text, sanitize = true) => {
     const data = Buffer.from(sanitize ? clean(text) : text);
@@ -148,6 +148,11 @@ export async function collectDiagnostics({ appRoot = appDirectory, dataDirectory
   for (const name of ['preview.log', 'studio.log', '.editor-runtime/editor.log', 'diagnostics/events.log', 'diagnostics/events.log.1']) await log(dataDirectory, name);
   if (installHome && path.resolve(installHome) !== path.resolve(dataDirectory || '.')) {
     for (const name of ['diagnostics/events.log', 'diagnostics/events.log.1']) await log(installHome, name, 'installation/' + name);
+  }
+  if (desktopLogDirectory) {
+    for (const name of ['main.log', 'main.log.1', 'renderer.log', 'sidecar.log', 'gpu-info.json', 'session-state.json', 'crash-marker.json']) {
+      await log(desktopLogDirectory, name, 'desktop/' + name);
+    }
   }
   const components = [];
   if (cacheDirectory) {

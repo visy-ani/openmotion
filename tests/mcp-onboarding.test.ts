@@ -8,6 +8,7 @@ import { phase1Tools } from '../shared/phase1-tools.ts';
 import { agentGuide, type IntegrationInfo } from '../shared/integration.ts';
 import { imageFeaturePrompt } from '../shared/image-features.ts';
 import { videoFeatureParameters, videoFeaturePrompt } from '../shared/video-features.ts';
+import { findScenario, scenarioAgentPrompt, scenarioRecipeTools } from '../shared/scenarios.ts';
 
 test('MCP onboarding covers every public domain tool and scenarios only compose real tools', () => {
   const described = mcpCapabilities.flatMap(capability => [...capability.tools]);
@@ -85,6 +86,9 @@ test('connection guidance exposes the maintained media workflow without asking f
   assert.doesNotMatch(guide, /不公开生成/);
   assert.match(guide, /Keep credentials in Settings/);
   assert.match(guide, /openmotion_assets_use generate/);
+  for (const scenarioToken of ['action=scenario', 'add_pool', 'recordIteration=true', 'link_design', 'link_motion']) {
+    assert.ok(guide.includes(scenarioToken), scenarioToken);
+  }
 });
 
 test('media example preserves setup and task continuation across supported languages', async () => {
@@ -204,23 +208,70 @@ test('image feature handbook scenarios cover background removal, relight and cha
   }
 });
 
-test('video feature handbook scenarios cover camera control, multi-shot and native audio with limits and recovery', () => {
+test('video feature handbook scenarios cover camera control and multi-shot with limits and recovery', () => {
   const translations = JSON.parse(readFileSync(new URL('../studio/src/i18n/mcp-ui.json', import.meta.url), 'utf8'));
   const camera = mcpScenarios.find(item => item.id === 'video-camera-control')!;
   const multiShot = mcpScenarios.find(item => item.id === 'video-multi-shot')!;
-  const nativeAudio = mcpScenarios.find(item => item.id === 'video-native-audio')!;
   assert.ok(camera.prompt.includes(videoFeaturePrompt('camera-control', 'A vintage camera on dark stone with warm rim lighting.', { movement: 'orbit', pace: 'slow' })));
   assert.ok(multiShot.prompt.includes(videoFeaturePrompt('multi-shot', 'An astronaut crossing a silver lunar ridge.', { shots: '3', style: 'narrative' })));
   assert.ok(multiShot.prompt.includes(JSON.stringify(videoFeatureParameters('multi-shot', { provider: 'opendesign', modelId: 'doubao-seedance-2-5-260628' }))));
-  assert.ok(nativeAudio.prompt.includes(videoFeaturePrompt('native-audio', 'Rain falling across a neon-lit alley at night.', { audioStyle: 'ambience' })));
-  assert.ok(nativeAudio.prompt.includes(JSON.stringify(videoFeatureParameters('native-audio', { provider: 'opendesign', modelId: 'doubao-seedance-2-5-260628' }))));
-  for (const scenario of [camera, multiShot, nativeAudio]) {
+  for (const scenario of [camera, multiShot]) {
     assert.match(scenario.prompt, /target=providers/);
     assert.match(scenario.prompt, /2 MiB/);
     assert.match(scenario.prompt, /omit fixed ratio/i);
     for (const locale of Object.values(translations) as Record<string, string>[]) {
       assert.ok(locale[scenario.title]?.trim());
       assert.ok(locale[scenario.description]?.trim());
+    }
+  }
+});
+
+test('Workflows capability, Black Friday recipe and design asset embedding stay aligned and localized', () => {
+  const translations = JSON.parse(readFileSync(new URL('../studio/src/i18n/mcp-ui.json', import.meta.url), 'utf8'));
+  const capability = mcpCapabilities.find(item => item.id === 'scenario-workflows')!;
+  const blackFriday = mcpScenarios.find(item => item.id === 'scenario-black-friday')!;
+  const writeback = mcpScenarios.find(item => item.id === 'scenario-agent-writeback')!;
+  const embedAssets = mcpScenarios.find(item => item.id === 'design-embed-assets')!;
+  const writebackFaq = mcpFaq.find(([question]) => question === 'How does my Agent run a workflow and save results to Assets?')!;
+
+  assert.ok(capability);
+  assert.equal(capability.title, 'Run a workflow end to end');
+  assert.deepEqual([...capability.tools], ['openmotion_assets_use', 'openmotion_design_edit', 'openmotion_design_project']);
+  assert.match(capability.prompt, /openmotion_get_skill/);
+  assert.match(capability.prompt, /openmotion:\/\/workflow\/\*/);
+  for (const tool of capability.tools) assert.ok(capability.prompt.includes(tool), tool);
+  assert.equal(blackFriday.title, 'Run the Black Friday campaign workflow');
+  assert.equal(blackFriday.prompt, scenarioAgentPrompt(findScenario('black-friday')!));
+  assert.deepEqual([...blackFriday.tools], [...scenarioRecipeTools]);
+  for (const tool of scenarioRecipeTools) assert.ok(blackFriday.prompt.includes(tool), tool);
+  assert.ok(writeback);
+  assert.equal(writeback.title, 'Run a workflow and save back to Assets');
+  assert.deepEqual([...writeback.tools], [...scenarioRecipeTools]);
+  assert.match(writeback.prompt, /recordIteration=true/);
+  assert.match(writeback.prompt, /openmotion_get_skill/);
+  for (const tool of scenarioRecipeTools) assert.ok(writeback.prompt.includes(tool), tool);
+  assert.ok(writebackFaq);
+  assert.match(writebackFaq[1], /Copy for Agent/);
+  assert.match(writebackFaq[1], /Copy MCP prompt/);
+  assert.match(writebackFaq[1], /openmotion_get_skill/);
+  assert.match(writebackFaq[1], /action=scenario/);
+  assert.match(writebackFaq[1], /recordIteration=true/);
+  assert.match(writebackFaq[1], /Sync/);
+  assert.deepEqual([...embedAssets.tools], ['openmotion_assets_use', 'openmotion_design_edit']);
+  assert.ok(embedAssets.prompt.includes('openmotion_assets_use'));
+  assert.ok(embedAssets.prompt.includes('openmotion_design_edit'));
+  assert.ok(embedAssets.prompt.includes('import_asset'));
+
+  for (const [locale, values] of Object.entries(translations) as [string, Record<string, string>][]) {
+    for (const key of [
+      capability.title, capability.description, capability.prompt,
+      blackFriday.title, blackFriday.description,
+      writeback.title, writeback.description, writeback.prompt,
+      writebackFaq[0], writebackFaq[1],
+      embedAssets.title, embedAssets.description, embedAssets.prompt,
+    ]) {
+      assert.ok(values[key]?.trim(), `${locale}: missing ${key}`);
+      assert.notEqual(values[key], key, `${locale}: untranslated ${key}`);
     }
   }
 });

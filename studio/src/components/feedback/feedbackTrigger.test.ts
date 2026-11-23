@@ -42,16 +42,28 @@ afterEach(() => {
 describe("requestStudioFeedback eligibility", () => {
   it("asks on the first eligible request", () => {
     const { seen, unsubscribe } = collect();
-    requestStudioFeedback({ reason: "render_complete", renderId: "r1" });
-    expect(seen).toEqual([{ reason: "render_complete", renderId: "r1" }]);
+    requestStudioFeedback({ reason: "render_complete" });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].reason).toBe("render_complete");
+    // The join key is minted here: the server job id embeds the project id and a
+    // timestamp, so it must never leave the browser.
+    expect(seen[0].renderId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    unsubscribe();
+  });
+
+  it("ignores a caller-supplied render id", () => {
+    const { seen, unsubscribe } = collect();
+    requestStudioFeedback({ reason: "render_complete", renderId: "demo_2026-11-10_10-00-00" });
+    expect(seen[0].renderId).not.toBe("demo_2026-11-10_10-00-00");
+    expect(seen[0].renderId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     unsubscribe();
   });
 
   it("asks only once per tab session, however many renders finish", () => {
     const { seen, unsubscribe } = collect();
-    requestStudioFeedback({ reason: "render_complete", renderId: "r1" });
-    requestStudioFeedback({ reason: "render_complete", renderId: "r2" });
-    requestStudioFeedback({ reason: "render_failed", renderId: "r3" });
+    requestStudioFeedback({ reason: "render_complete" });
+    requestStudioFeedback({ reason: "render_complete" });
+    requestStudioFeedback({ reason: "render_failed" });
     expect(seen).toHaveLength(1);
     unsubscribe();
   });

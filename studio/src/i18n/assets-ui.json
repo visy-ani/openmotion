@@ -230,8 +230,8 @@
     "Text to speech": "语音合成",
     "Music & sound": "音乐与音效",
     "Text to video": "文生视频",
-    "Image editing": "参考图编辑",
-    "Text to image": "文生图片",
+    "Image editing": "图像编辑",
+    "Text to image": "文生图",
     "Settings follow your model": "参数随模型切换",
     "Resize asset navigation": "调整资产侧栏宽度",
     "Resize creator": "调整创作面板宽度",
@@ -345,7 +345,9 @@
     "Download the original task image. Draft changes apply only to your next generation.": "元のタスクの画像を取得します。下書きの変更は次の生成に適用されます。",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "元の画像を取得できませんでした。再生成せずにダウンロードを再開できます。",
     "{provider} needs setup before generating.": "生成する前に {provider} の設定が必要です。",
-    "Configure {provider}": "{provider} を設定"
+    "Configure {provider}": "{provider} を設定",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "参照画像が OpenDesign の 2 MiB アップロード上限を超えています。",
+    "OpenDesign does not accept this reference image format.": "OpenDesign はこの参照画像形式に対応していません。"
   },
   "ko": {
     "Follows first frame": "첫 프레임에 맞춤",
@@ -360,7 +362,9 @@
     "Download the original task image. Draft changes apply only to your next generation.": "원래 작업의 이미지를 가져옵니다. 초안 변경은 다음 생성에 적용됩니다.",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "원본 이미지를 다운로드하지 못했습니다. 다시 생성하지 않고 다운로드를 계속하세요.",
     "{provider} needs setup before generating.": "생성하기 전에 {provider} 설정이 필요합니다.",
-    "Configure {provider}": "{provider} 설정"
+    "Configure {provider}": "{provider} 설정",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "참조 이미지가 OpenDesign의 2 MiB 업로드 한도를 초과합니다.",
+    "OpenDesign does not accept this reference image format.": "OpenDesign에서 지원하지 않는 참조 이미지 형식입니다."
   },
   "de": {
     "Follows first frame": "Wie das erste Bild",
@@ -375,7 +379,9 @@
     "Download the original task image. Draft changes apply only to your next generation.": "Lädt das Bild des ursprünglichen Auftrags. Entwurfsänderungen gelten für die nächste Generierung.",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "Das ursprüngliche Bild konnte nicht heruntergeladen werden. Setze den Download ohne erneute Generierung fort.",
     "{provider} needs setup before generating.": "{provider} muss vor dem Generieren eingerichtet werden.",
-    "Configure {provider}": "{provider} einrichten"
+    "Configure {provider}": "{provider} einrichten",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "Das Referenzbild überschreitet das OpenDesign-Upload-Limit von 2 MiB.",
+    "OpenDesign does not accept this reference image format.": "OpenDesign unterstützt dieses Referenzbildformat nicht."
   },
   "fr": {
     "Follows first frame": "Selon la première image",
@@ -390,7 +396,9 @@
     "Download the original task image. Draft changes apply only to your next generation.": "Récupère l’image de la tâche initiale. Les modifications du brouillon s’appliquent à la prochaine génération.",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "Impossible de télécharger l’image initiale. Reprenez le téléchargement sans la générer à nouveau.",
     "{provider} needs setup before generating.": "{provider} doit être configuré avant de générer.",
-    "Configure {provider}": "Configurer {provider}"
+    "Configure {provider}": "Configurer {provider}",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "L’image de référence dépasse la limite de 2 Mio d’OpenDesign.",
+    "OpenDesign does not accept this reference image format.": "OpenDesign ne prend pas en charge ce format d’image de référence."
   },
   "ru": {
     "Follows first frame": "По первому кадру",
@@ -405,7 +413,9 @@
     "Download the original task image. Draft changes apply only to your next generation.": "Загрузить изображение исходной задачи. Изменения черновика применятся к следующей генерации.",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "Не удалось загрузить исходное изображение. Продолжите загрузку без повторной генерации.",
     "{provider} needs setup before generating.": "Перед генерацией необходимо настроить {provider}.",
-    "Configure {provider}": "Настроить {provider}"
+    "Configure {provider}": "Настроить {provider}",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "Размер референсного изображения превышает лимит OpenDesign в 2 МиБ.",
+    "OpenDesign does not accept this reference image format.": "OpenDesign не поддерживает этот формат референсного изображения."
   },
   "es": {
     "Follows first frame": "Según el primer fotograma",
@@ -420,7 +430,9 @@
     "Download the original task image. Draft changes apply only to your next generation.": "Recupera la imagen de la tarea original. Los cambios del borrador se aplican a la próxima generación.",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "No se pudo descargar la imagen original. Continúa la descarga sin volver a generarla.",
     "{provider} needs setup before generating.": "{provider} requiere configuración antes de generar.",
-    "Configure {provider}": "Configurar {provider}"
+    "Configure {provider}": "Configurar {provider}",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "La imagen de referencia supera el límite de carga de 2 MiB de OpenDesign.",
+    "OpenDesign does not accept this reference image format.": "OpenDesign no admite este formato de imagen de referencia."
   },
   "pt-BR": {
     "Follows first frame": "Conforme o primeiro quadro",
@@ -435,7 +447,9 @@
     "Download the original task image. Draft changes apply only to your next generation.": "Recupera a imagem da tarefa original. As alterações do rascunho valem para a próxima geração.",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "Não foi possível baixar a imagem original. Continue o download sem gerar novamente.",
     "{provider} needs setup before generating.": "{provider} precisa ser configurado antes de gerar.",
-    "Configure {provider}": "Configurar {provider}"
+    "Configure {provider}": "Configurar {provider}",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "A imagem de referência excede o limite de envio de 2 MiB do OpenDesign.",
+    "OpenDesign does not accept this reference image format.": "O OpenDesign não aceita este formato de imagem de referência."
   },
   "it": {
     "Follows first frame": "Come il primo fotogramma",
@@ -450,7 +464,9 @@
     "Download the original task image. Draft changes apply only to your next generation.": "Recupera l’immagine dell’attività originale. Le modifiche alla bozza valgono per la prossima generazione.",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "Impossibile scaricare l’immagine originale. Riprendi il download senza generarla di nuovo.",
     "{provider} needs setup before generating.": "{provider} deve essere configurato prima di generare.",
-    "Configure {provider}": "Configura {provider}"
+    "Configure {provider}": "Configura {provider}",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "L’immagine di riferimento supera il limite di caricamento di 2 MiB di OpenDesign.",
+    "OpenDesign does not accept this reference image format.": "OpenDesign non accetta questo formato di immagine di riferimento."
   },
   "tr": {
     "Follows first frame": "İlk kareye göre",
@@ -465,6 +481,8 @@
     "Download the original task image. Draft changes apply only to your next generation.": "Asıl görevin görselini alır. Taslak değişiklikleri sonraki üretime uygulanır.",
     "The original image could not be downloaded. Continue downloading this task without generating again.": "Asıl görsel indirilemedi. Yeniden üretmeden indirmeye devam edin.",
     "{provider} needs setup before generating.": "Üretmeden önce {provider} kurulumu gerekiyor.",
-    "Configure {provider}": "{provider} yapılandır"
+    "Configure {provider}": "{provider} yapılandır",
+    "The reference image is larger than the 2 MiB OpenDesign upload limit.": "Referans görsel OpenDesign’ın 2 MiB yükleme sınırını aşıyor.",
+    "OpenDesign does not accept this reference image format.": "OpenDesign bu referans görsel biçimini kabul etmiyor."
   }
 }

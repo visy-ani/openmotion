@@ -683,8 +683,8 @@ export const distributionDocuments = [
   'README.md', 'README.zh-CN.md', 'CONTRIBUTING.md', 'CONTRIBUTING.zh-CN.md', 'AGENTS.md', 'CLAUDE.md', 'docs/README.md', 'repository-media.json',
   'docs/product/architecture.md', 'docs/product/changes.md', 'docs/product/media-generation-design.md', 'docs/product/studio-vision.md', 'docs/product/platform-export.md',
   'tracking/README.md', 'tracking/INTEGRATION.md', 'tracking/posthog-geoip.hog',
-  'docs/agent-adapters.md', 'docs/browser-runtime.md', 'docs/design-system.md', 'docs/design-studio.md', 'docs/editor-fork.md',
-  'docs/hyperframes.md', 'docs/mcp-phase1-tools.md', 'docs/model-gateway.md', 'docs/assets.md', 'docs/project-archives.md', 'docs/generation-options.md', 'docs/provider-settings.md', 'docs/local-agents.md', 'docs/openmotion-director.md', 'docs/motion-director.md',
+  'docs/agent-adapters.md', 'docs/browser-runtime.md', 'docs/design-system.md', 'docs/design-studio.md', 'docs/editor-fork.md', 'docs/routing.md', 'docs/i18n.md',
+  'docs/hyperframes.md', 'docs/mcp-phase1-tools.md', 'docs/model-gateway.md', 'docs/assets.md', 'docs/project-archives.md', 'docs/generation-options.md', 'docs/provider-settings.md', 'docs/local-agents.md', 'docs/agent-runtime-architecture.md', 'docs/cross-platform-mcp-architecture.md', 'docs/openmotion-director.md', 'docs/motion-director.md',
   'docs/motion-extension-scope.md', 'docs/npm-installation.md', 'docs/install-attribution.md', 'docs/install.md', 'docs/install-onboarding.md', 'docs/release-guide.md', 'docs/release-workflows.md', 'docs/templates/release-record.md', 'docs/project-workspace.md',
   'docs/repository-migration.md', 'docs/session-architecture.md', 'docs/shared-editor.md',
   'docs/README.zh-CN.md', 'docs/README.ja.md',
@@ -743,9 +743,9 @@ export async function distributionFiles(profile: string, include: (file: string)
     'package.json', 'package-lock.json',
     'skills/openmotion-recreate/assets/reconstruction.js',
     'server.ts', 'browser.ts', 'workspace.ts', 'mcp.ts', 'mcp-tools.ts', 'editor-runtime.ts',
-    'phase1.ts', 'phase1-versions.ts', 'project-archive.ts', 'project-management.ts', 'design-projects.ts', 'review-comments.ts', 'project-asset-names.ts', 'inline-video.ts', 'preview.ts', 'hyperframes.ts', 'template-library.ts',
+    'phase1.ts', 'phase1-versions.ts', 'project-archive.ts', 'project-management.ts', 'design-projects.ts', 'game-projects.ts', 'review-comments.ts', 'project-asset-names.ts', 'inline-video.ts', 'preview.ts', 'hyperframes.ts', 'template-library.ts',
     'template-catalog.ts', 'prism-templates.ts', 'editor-server.ts',
-    'scripts/runtime-assets.mjs', 'scripts/vision-runtime.mjs', 'scripts/npm-runtime.mjs', 'scripts/runtime-lock.json', 'scripts/lint-project.mjs',
+    'scripts/game-glb-inspect.mjs', 'scripts/runtime-assets.mjs', 'scripts/vision-runtime.mjs', 'scripts/npm-runtime.mjs', 'scripts/runtime-lock.json', 'scripts/lint-project.mjs',
     'scripts/npm-installer.mjs', 'scripts/npm-hosts.mjs', 'scripts/install-public-skill.ts', 'scripts/recover-workspace-lock.ts', 'scripts/cleanup-harness-bundles.mjs', 'scripts/check-installed-mcp.mjs', 'scripts/mcp-client.mjs',
     'scripts/install-onboarding.mjs', 'scripts/inline-onboarding.mjs', 'scripts/codex-host-handoff.mjs', 'scripts/onboarding-catalog.ts', 'scripts/open-template-library.ts', 'scripts/install-library-skill.mjs',
     'scripts/inline-storyboard.mjs', 'mcp-ui/storyboard/inline.css', 'mcp-ui/storyboard/inline.js',
@@ -788,7 +788,7 @@ export async function distributionFiles(profile: string, include: (file: string)
         if (/^studio\/(?:build|public)\//.test(file) && /\.(?:gif|mp4|webm|mov|m4v|mp3|m4a|wav|ogg|flac|aac)$/i.test(file) && !files.includes(file)) {
           throw new Error(`Unregistered Studio media: ${file}. Host optional previews and load them on demand. Add required offline media to scripts/distribution.ts with its runtime purpose.`);
         }
-        if (extensions.test(entry.name)) files.push(file);
+        if (file.startsWith('templates/games/') || file.startsWith('templates/game-kits/') || extensions.test(entry.name)) files.push(file);
       }
     }
   }
@@ -805,6 +805,7 @@ export async function distributionFiles(profile: string, include: (file: string)
   await walk('web', /\.(?:ts|js|json|html|css|svg|jpg|png|webp|ttf|woff2?|txt)$/);
   for (const directory of ['templates', 'template-library']) await walk(directory, /\.(?:html|js|json|css|svg|jpg|png|webp|md|txt|ttf|woff2?)$/);
   files.push('template-library/openmotion-welcome/assets/soundtrack.m4a');
+  files.push('skills/openmotion-game/LICENSE-HIGGSFIELD');
   for (const skill of packagedSkills) await walk('skills/' + skill, /\.(?:md|mjs|ts|py|json|ya?ml)$/);
   await walk('studio/build', /\.(?:html|js|css|json|svg|png|jpg|webp|woff2?|ttf|txt)$/);
   await walk('studio/public', /\.(?:html|js|css|json|svg|png|jpg|webp|woff2?|ttf|txt)$/);

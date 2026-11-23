@@ -50,7 +50,7 @@ try {
       localStorage.setItem('motion.studio.locale', 'en');
       localStorage.setItem('hf-studio-ui-preferences', JSON.stringify({ theme }));
     }, theme);
-    await page.goto(`${origin}/?page=assets`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${origin}/assets`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('button[aria-label="View tasks"]'); await page.click('button[aria-label="View tasks"]');
     await page.waitForFunction(title => [...document.querySelectorAll('.om-task-item')].some(node => node.textContent.includes(title)), {}, title);
     await page.evaluate(title => [...document.querySelectorAll('.om-task-item')].find(node => node.textContent.includes(title)).click(), title);
@@ -78,7 +78,7 @@ try {
   const target = path.join(store.projectDirectory, `assets/generated/${unavailable.id}-1.png`);
   await writeFile(target, 'Project conflict');
   await gateway.tick(); await Promise.all([...gateway.active.values()].map(task => task.done));
-  await page.goto(`${origin}/?page=assets`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${origin}/assets`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('button[aria-label="View tasks"]'); await page.click('button[aria-label="View tasks"]');
   await page.waitForFunction(() => [...document.querySelectorAll('.om-task-item')].some(node => node.textContent.includes('Unavailable retained files')));
   await page.evaluate(() => [...document.querySelectorAll('.om-task-item')].find(node => node.textContent.includes('Unavailable retained files')).click());

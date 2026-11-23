@@ -3,6 +3,7 @@ import { Button } from 'open-design-ui/button';
 import * as tracking from './pageTracking';
 import { Tooltip } from "../components/ui/Tooltip";
 import { useEffect, useState } from 'react';
+import { editorProjectIdFromPath } from '../../../shared/spa-routes';
 import type { AgentChoice, AgentLaunch, LocalAgent } from '../../../shared/local-agents';
 import { useI18n } from '../i18n/I18n';
 import { RemixIcon } from '../icons/RemixIcons';
@@ -13,10 +14,16 @@ import { StudioToastViewport } from '../components/StudioToastViewport';
 import { ProviderAvatar, ModelAvatar, SettingsDialog, SettingsError, SettingsLoading } from './settingsPrimitives';
 import { gatewayRequest } from './gatewayClient';
 import { notifyAgentsChanged, openAgentSettings, useLocalAgents } from './useLocalAgents';
+import { AgentRuntimeSettings } from './AgentRuntimeSettings';
+import { consumePendingRuntimesView, useAgentRuntimes } from './useAgentRuntimes';
+
+const RUNTIMES_VIEW_ID = '__runtimes__';
 
 const authLabel = { 'signed-in': 'Signed in', 'signed-out': 'Sign-in required', unknown: 'Sign-in managed by Agent' };
 const agentIcon = (agent: LocalAgent) => ({ id: agent.icon, custom: false });
 const projectScope = () => {
+  const pathId = editorProjectIdFromPath(location.pathname);
+  if (pathId) return `?projectId=${encodeURIComponent(pathId)}`;
   const query = new URLSearchParams(location.search).get('project');
   if (query) return `?projectId=${encodeURIComponent(query)}`;
   try { const id = location.hash.match(/^#project\/([^?]+)/)?.[1]; return id ? `?projectId=${encodeURIComponent(decodeURIComponent(id))}` : ''; }
@@ -24,12 +31,46 @@ const projectScope = () => {
 };
 
 export function AgentSettings() {
-  const { t } = useI18n(), directory = useLocalAgents(), toast = useToast();
-  const [selected, setSelected] = useState('codex'), [query, setQuery] = useState(''), [filter, setFilter] = useState('all'), [detail, setDetail] = useState(false);
+  const { t } = useI18n(), directory = useLocalAgents(), runtimes = useAgentRuntimes(), toast = useToast();
+  const [selected, setSelected] = useState(() => (consumePendingRuntimesView() ? RUNTIMES_VIEW_ID : 'codex'));
+  const [query, setQuery] = useState(''), [filter, setFilter] = useState('all'), [detail, setDetail] = useState(() => selected === RUNTIMES_VIEW_ID);
+
+  useEffect(() => {
+    const onOpenRuntimes = () => {
+      consumePendingRuntimesView();
+      setSelected(RUNTIMES_VIEW_ID);
+      setDetail(true);
+    };
+    window.addEventListener('motion:agents-runtimes-open', onOpenRuntimes);
+    return () => window.removeEventListener('motion:agents-runtimes-open', onOpenRuntimes);
+  }, []);
+
   const agent = directory.data?.agents.find(item => item.id === selected);
   const agents = directory.data?.agents.filter(item => (filter === 'all' || item.installed === (filter === 'installed')) && `${item.label} ${item.bin}`.toLowerCase().includes(query.toLowerCase())) ?? [];
+  const remoteRuntimes = (runtimes.data?.runtimes ?? []).filter(item => item.kind !== 'local-direct');
+  const onlineRuntimeCount = (runtimes.data?.runtimes ?? []).filter(item => item.status === 'online').length;
+  const localDirectAvailable = runtimes.data?.localDirectAvailable ?? true;
+
   return <section className="om-provider-settings" data-detail={detail} aria-label={t('Local Agents')}>
     <aside className="om-provider-list">
+      <Button
+        variant="plain"
+        className="om-nav-item om-provider-item om-runtime-nav-entry"
+        aria-current={selected === RUNTIMES_VIEW_ID ? 'page' : undefined}
+        onClick={() => {
+          tracking.reportSettingsClick('local_agents', 'select_agent', { agent: RUNTIMES_VIEW_ID });
+          setSelected(RUNTIMES_VIEW_ID);
+          setDetail(true);
+        }}
+      >
+        <RemixIcon name="computer-line" size={16} />
+        <span className="om-provider-item-name">{t('Connected Computers')}</span>
+        {runtimes.data && (
+          <span className="om-badge" data-active={onlineRuntimeCount > 0 || undefined}>
+            {onlineRuntimeCount}
+          </span>
+        )}
+      </Button>
       <div className="om-provider-search"><label className="om-field"><RemixIcon name="search-line" size={16} /><input type="search" aria-label={t('Search Agents')} placeholder={t('Search Agents…')} value={query} onChange={event => setQuery(event.target.value)} /></label>
         <Menu tooltip={t('Filter Agents')} modal={false} trigger={<IconButton variant="ghost" className="motion-icon-button" aria-label={t('Filter Agents')} icon={<RemixIcon name="filter-3-line" size={16} />} />}><MenuRadioGroup value={filter} onValueChange={value => setFilter(String(value))}>{[['all', 'All Agents'], ['installed', 'Installed'], ['missing', 'Not installed']].map(([value, label]) => <MenuRadioItem key={value} value={value}>{t(label)}</MenuRadioItem>)}</MenuRadioGroup></Menu>
       </div>
@@ -39,18 +80,43 @@ export function AgentSettings() {
       <p className="om-muted om-agent-list-note">{t('Use the Agents installed on this computer, with their own accounts.')}</p>
     </aside>
     <div className="om-provider-detail"><Button variant="plain" className="om-button om-provider-back" onClick={() => setDetail(false)}><RemixIcon name="arrow-left-line" size={16} />{t('Agents')}</Button>
-      {directory.error ? <SettingsError retry={directory.refresh} /> : !directory.data ? <SettingsLoading /> : agent && <AgentDetail key={agent.id} agent={agent} current={directory.data.default} showToast={toast.showToast} />}
+      {selected === RUNTIMES_VIEW_ID
+        ? <AgentRuntimeSettings directory={runtimes.data} error={runtimes.error} onRefresh={() => { runtimes.refresh(); directory.refresh(); }} showToast={toast.showToast} />
+        : directory.error
+          ? <SettingsError retry={directory.refresh} />
+          : !directory.data
+            ? <SettingsLoading />
+            : agent && <AgentDetail key={agent.id} agent={agent} current={directory.data.default} remoteRuntimes={remoteRuntimes} localDirectAvailable={localDirectAvailable} onOpenRuntimes={() => { setSelected(RUNTIMES_VIEW_ID); setDetail(true); }} showToast={toast.showToast} />}
     </div><StudioToastViewport {...toast} />
   </section>;
 }
 
-function AgentDetail({ agent, current, showToast }: { agent: LocalAgent; current: AgentChoice | null; showToast: ReturnType<typeof useToast>['showToast'] }) {
+function AgentDetail({
+  agent,
+  current,
+  remoteRuntimes = [],
+  localDirectAvailable = true,
+  onOpenRuntimes,
+  showToast,
+}: {
+  agent: LocalAgent;
+  current: AgentChoice | null;
+  remoteRuntimes?: ReturnType<typeof useAgentRuntimes>['data'] extends infer D
+    ? D extends { runtimes: infer R }
+      ? R
+      : never
+    : never;
+  localDirectAvailable?: boolean;
+  onOpenRuntimes?: () => void;
+  showToast: ReturnType<typeof useToast>['showToast'];
+}) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false), [query, setQuery] = useState(''), [custom, setCustom] = useState(''), [adding, setAdding] = useState(false);
   const [model, setModel] = useState(current?.agent === agent.id ? current.model : 'default'), [reasoning, setReasoning] = useState(current?.agent === agent.id ? current.reasoning ?? '' : '');
   const [launch, setLaunch] = useState<'login' | 'launch' | null>(null);
   const choice = { agent: agent.id, model, ...(reasoning ? { reasoning } : {}) };
   const modelInfo = agent.models.find(item => item.id === model);
+  const providingRemoteRuntimes = remoteRuntimes.filter(rt => rt.agents.some(item => item.id === agent.id && item.installed));
   async function act(action: () => Promise<unknown>, message?: string, report?: 'refresh_status' | 'refresh_models' | 'add_model' | 'set_default_agent') {
     setBusy(true); try { await action(); notifyAgentsChanged(); if (message) showToast(t(message), 'info'); if (report) tracking.reportAgentSetting(agent.id, report, 'success'); }
     catch (error) { if (report) tracking.reportAgentSetting(agent.id, report, 'failure'); showToast(error instanceof Error ? error.message : t('Could not save settings'), 'error'); }
@@ -60,6 +126,26 @@ function AgentDetail({ agent, current, showToast }: { agent: LocalAgent; current
   const selected = current?.agent === agent.id && current.model === model && (current.reasoning ?? '') === reasoning;
   return <div className="om-provider-detail-inner">
     <header className="om-settings-row"><div className="om-provider-heading"><ProviderAvatar name={agent.label} provider={agentIcon(agent)} /><div><h1 className="om-title">{agent.label}</h1><p className="om-muted">{t('Local Agent')}{agent.version ? ` · v${agent.version}` : ''}</p></div></div><span className="om-badge" data-active={agent.installed}>{t(agent.installed ? 'Installed' : 'Not installed')}</span></header>
+    {(!localDirectAvailable || providingRemoteRuntimes.length > 0) && (
+      <section className="om-card om-card-stack">
+        <div className="om-settings-row">
+          <div>
+            <h2 className="om-subtitle">{t('Connected Bridge & Cloud Runtimes')}</h2>
+            <p className="om-muted">
+              {providingRemoteRuntimes.length > 0
+                ? t('Available via: {runtimes}', { runtimes: providingRemoteRuntimes.map(rt => `${rt.name} (${rt.status})`).join(', ') })
+                : t('Running in Cloud control-plane mode. Connect your local machine with the Bridge script to use {agent} from the browser.', { agent: agent.label })}
+            </p>
+          </div>
+          {onOpenRuntimes && (
+            <Button variant="ghost" className="om-button h-auto" onClick={onOpenRuntimes}>
+              <RemixIcon name="link-line" size={14} />
+              {t('Manage Runtimes')}
+            </Button>
+          )}
+        </div>
+      </section>
+    )}
     <section className="om-card om-card-stack"><div className="om-settings-row"><h2 className="om-subtitle">1 · {t('Install Agent')}</h2>{agent.installed && <RemixIcon name="check-line" size={16} />}</div><p className="om-muted">{t(agent.installed ? 'Agent found on this computer. Updates are managed by the Agent.' : 'Install the official CLI, then return here to check its status.')}</p><div className="om-settings-actions"><a className="om-button" href={agent.website} target="_blank" rel="noreferrer"><RemixIcon name="external-link-line" size={14} />{t(agent.installed ? 'Official guide' : 'Download & install')}</a><Button variant="ghost" className="om-button h-auto" disabled={busy} onClick={() => void act(() => gatewayRequest(`settings/agents/${agent.id}/inspect`, 'POST', {}), 'Agent status refreshed', 'refresh_status')}><RemixIcon name="refresh-line" size={14} />{t(busy ? 'Checking…' : 'Check again')}</Button></div></section>
     <section className="om-card om-card-stack"><div className="om-settings-row"><h2 className="om-subtitle">2 · {t('Sign in')}</h2><span className="om-badge" data-active={agent.auth === 'signed-in'}>{t(authLabel[agent.auth])}</span></div><p className="om-muted">{t('Sign in in the Agent’s own terminal. OpenMotion never copies your login credentials.')}</p>{agent.loginHint && <p className="om-muted">{t(agent.loginHint)}</p>}<Button variant="ghost" className="om-button h-auto" disabled={!agent.installed || busy} onClick={() => setLaunch('login')}><RemixIcon name="terminal-box-line" size={15} />{t(agent.auth === 'signed-in' ? 'Manage sign-in' : 'Open sign-in')}</Button></section>
     <section className="om-settings-section"><div className="om-settings-row"><h2 className="om-subtitle">3 · {t('Agent model')}</h2><div className="om-settings-actions"><Button variant="ghost" className="om-button h-auto" disabled={!agent.installed || busy} onClick={() => void act(() => gatewayRequest(`settings/agents/${agent.id}/inspect`, 'POST', {}), 'Models refreshed', 'refresh_models')}>{t('Refresh models')}</Button><Tooltip label={t('Add model ID')} wrap><IconButton variant="ghost" className="motion-icon-button" disabled={!agent.installed} aria-label={t('Add model ID')} onClick={() => setAdding(!adding)} icon={<RemixIcon name="add-line" size={16} />} /></Tooltip></div></div>

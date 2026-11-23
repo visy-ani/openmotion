@@ -28,6 +28,7 @@ COPY --from=build /app/mcp-ui/template-recommendations/build ./mcp-ui/template-r
 ENV PORT=4173 \
     MOTION_BIND_HOST=0.0.0.0 \
     MOTION_DATA_DIR=/data \
+    MOTION_ACCOUNT_DIR=/data/account \
     HYPERFRAMES_BROWSER_PATH=/usr/bin/chromium \
     HYPERFRAMES_FFMPEG_PATH=/usr/bin/ffmpeg \
     HYPERFRAMES_FFPROBE_PATH=/usr/bin/ffprobe

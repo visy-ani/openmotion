@@ -7,3 +7,7 @@ Other scene posters and motion samples use the existing [OpenMotion skill artwor
 Explore uses two illustrations from *Pepper&Carrot* by David Revoy as art references for anime prompts. [Pepper](https://www.peppercarrot.com/en/viewer/artworks-src__2021-10-10_Pepper_by-David-Revoy.html) and [Komona sunset](https://www.peppercarrot.com/en/wallpapers/index.html) are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The local WebP copies are resized and the cards crop them to fit.
 
 The Audio navigation menu's Voice changer preview uses two original studio portraits (`voice-source-avatar.webp` and `voice-target-avatar.webp`) generated specifically for OpenMotion.
+
+The AI Influencer cover (`ai-influencer-marketing.webp`) is an original creator-marketing studio photograph generated specifically for OpenMotion.
+
+The background-removal and relighting guides use two original comparison renders (`sofa-cutout.webp` and `sofa-relight.webp`) generated specifically for OpenMotion.

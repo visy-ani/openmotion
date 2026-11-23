@@ -36,12 +36,14 @@ export function DesignScenePage({
   onOpenProject,
   onExplore,
   onOpenMcp,
+  onStartScenario,
 }: {
   scene: DesignTabId;
   onSelectDesignScene: (scene: DesignTabId) => void;
   onOpenProject: (projectId: string) => void;
   onExplore: () => void;
   onOpenMcp: () => void;
+  onStartScenario?: () => void;
 }) {
   const { t, locale } = useI18n();
   const { info: integrationInfo } = useIntegrationInfo();
@@ -107,7 +109,9 @@ export function DesignScenePage({
     setMention(null);
     setPreviewTemplate(null);
     if (!scenario || scenario.examples.length <= 1) return;
-    const id = window.setInterval(() => setPlaceholderIndex(i => (i + 1) % scenario.examples.length), 6000);
+    const id = window.setInterval(() => {
+      if (!document.hidden) setPlaceholderIndex(i => (i + 1) % scenario.examples.length);
+    }, 6000);
     return () => window.clearInterval(id);
   }, [scenario?.id]);
 
@@ -357,6 +361,23 @@ export function DesignScenePage({
               <div className="om-discovery-hero-copy">
                 <h1 id="design-studio-title">{t('Design Studio')}</h1>
                 <p>{t('Start with a template to create editable web prototypes, presentations, and documents.')}</p>
+                {onStartScenario && (
+                  <div className="om-hero-actions">
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      className="om-button h-auto"
+                      data-primary="media"
+                      onClick={() => {
+                        reportCreativeClick('creative_studio', 'studio_bar', 'select_scene', { studio: 'design', navTarget: 'workflows' });
+                        onStartScenario();
+                      }}
+                    >
+                      {t('Start workflow')}
+                      <RemixIcon name="arrow-right-line" size={16} />
+                    </Button>
+                  </div>
+                )}
               </div>
             </header>
 
@@ -397,6 +418,7 @@ export function DesignScenePage({
                       event.currentTarget.querySelector<HTMLButtonElement>('.om-design-card-open')?.click();
                     }}>
                       <ScaledPreviewThumb
+                        active={previewTemplate === null}
                         src={tpl.previewUrl}
                         title={tpl.title}
                         badge={tpl.category !== tpl.scenario ? tpl.category : undefined}

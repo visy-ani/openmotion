@@ -7,7 +7,7 @@ import { useI18n } from '../i18n/I18n';
 import { Popover } from '../components/ui/Popover';
 import { Skeleton } from '../components/ui/Skeleton';
 import { RemixIcon } from '../icons/RemixIcons';
-import { escapeRegex } from '../utils/sourcePatcher';
+import { escapeRegex } from '../utils/regex';
 import { assetRequest } from './assetClient';
 import { creationKinds } from './AssetCreationVisuals';
 import { mediaLabels, modelDestination, sceneDestination, studioIconTone, supportsScene, type StudioDestination } from './creativeStudios';

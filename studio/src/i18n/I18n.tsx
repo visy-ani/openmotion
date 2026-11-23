@@ -1,7 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { isLocale, languages, translate, type Locale, type MessageValues } from './messages';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ensureLocaleLoaded, isLocale, isLocaleLoaded, languages, translate, type Locale, type MessageValues } from './messages';
 import { pageMetadata } from '../../../packages/design-system/metadata.js';
-export { languages, isLocale, translate, sourceMessage } from './messages';
+export { languages, isLocale, isLocaleLoaded, ensureLocaleLoaded, translate, sourceMessage } from './messages';
 export type { Locale, MessageValues, Translate } from './messages';
 export const LOCALE_STORAGE_KEY = 'motion.studio.locale';
 
@@ -40,11 +40,43 @@ export const useI18n = () => useContext(I18nContext);
 
 export function I18nProvider({ children, initialLocale }: { children: ReactNode; initialLocale?: Locale }) {
   const [locale, updateLocale] = useState<Locale>(() => initialLocale ?? readLocale());
+  const [loadedVersion, setLoadedVersion] = useState(0);
+  const requestSeq = useRef(0);
+
+  const applyLocale = useCallback((next: Locale) => {
+    const seq = ++requestSeq.current;
+    if (isLocaleLoaded(next)) {
+      updateLocale(next);
+      return;
+    }
+    // Keep the currently rendered locale painted while the target locale chunk
+    // downloads so switching languages never flashes raw English fallback copy.
+    void ensureLocaleLoaded(next)
+      .then(() => {
+        if (requestSeq.current !== seq) return;
+        updateLocale(next);
+        setLoadedVersion(version => version + 1);
+      })
+      .catch(() => { /* Keep the active locale intact if chunk loading fails. */ });
+  }, []);
+
   const setLocale = useCallback((next: Locale) => {
     if (!isLocale(next)) return;
-    updateLocale(next);
     try { localStorage.setItem(LOCALE_STORAGE_KEY, next); } catch { /* Switching still works without persistence. */ }
-  }, []);
+    applyLocale(next);
+  }, [applyLocale]);
+
+  useEffect(() => {
+    if (isLocaleLoaded(locale)) return;
+    let cancelled = false;
+    void ensureLocaleLoaded(locale)
+      .then(() => {
+        if (!cancelled) setLoadedVersion(version => version + 1);
+      })
+      .catch(() => { /* Fallback to English source keys if the initial chunk fails. */ });
+    return () => { cancelled = true; };
+  }, [locale]);
+
   useEffect(() => {
     document.documentElement.lang = locale;
     const metadata = pageMetadata(locale);
@@ -62,11 +94,14 @@ export function I18nProvider({ children, initialLocale }: { children: ReactNode;
     }
     const onStorage = (event: StorageEvent) => {
       if (event.storageArea && event.storageArea !== localStorage) return;
-      if (event.key === LOCALE_STORAGE_KEY || event.key === null) updateLocale(isLocale(event.newValue) ? event.newValue : browserLocale() ?? 'zh-CN');
+      if (event.key === LOCALE_STORAGE_KEY || event.key === null) {
+        applyLocale(isLocale(event.newValue) ? event.newValue : browserLocale() ?? 'zh-CN');
+      }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [locale]);
-  const value = useMemo(() => ({ ...languageTools(locale), setLocale }), [locale, setLocale]);
+  }, [locale, applyLocale]);
+
+  const value = useMemo(() => ({ ...languageTools(locale), setLocale }), [locale, setLocale, loadedVersion]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

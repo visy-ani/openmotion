@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { attachmentDisposition } from '../shared/http-header.ts';
 import { constants } from 'node:fs';
 import { mkdir, open, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -7,6 +8,7 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { WorkspaceStore } from '../workspace.ts';
 import { MAX_ASSET_BYTES } from '../shared/asset-limits.ts';
+import { mediaFilename } from '../shared/render-name.ts';
 import { AssetLibrary, libraryId } from './asset-library.ts';
 import { requireNativeRuntime } from '../scripts/npm-runtime.mjs';
 import { pluginRoot } from '../hyperframes.ts';
@@ -35,7 +37,7 @@ export async function assetHttp(req: IncomingMessage, res: ServerResponse, url: 
     } finally { await rm(filename, { force: true }); }
     return true;
   }
-  const media = url.pathname.match(/^\/api\/assets\/([^/]+)\/versions\/([^/]+)\/file$/);
+  const media = url.pathname.match(/^\/api\/assets\/([^/]+)\/versions\/([^/]+)\/(?:file|media)$/);
   if (!media || !['GET', 'HEAD'].includes(req.method ?? '')) return false;
   if (!libraryId(media[1]) || !libraryId(media[2])) throw new Error('ASSET_VERSION_UNAVAILABLE');
   const { filename, version } = await library.resolve({ assetId: media[1], versionId: media[2] }, true);
@@ -52,9 +54,12 @@ export async function assetHttp(req: IncomingMessage, res: ServerResponse, url: 
       if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= info.size) { res.writeHead(416, { 'Content-Range': `bytes */${info.size}` }); res.end(); return true; }
       status = 206; res.setHeader('Content-Range', `bytes ${start}-${end}/${info.size}`);
     }
-    res.writeHead(status, { 'Content-Type': version.mimeType, 'Content-Length': end - start + 1, 'Accept-Ranges': 'bytes',
+    const title = url.searchParams.get('title');
+    const downloadName = title?.trim() ? mediaFilename(title, path.extname(version.filename)) : version.filename;
+    const plainDownloadName = /^[\x20-\x7e]+$/.test(downloadName) ? downloadName : version.filename;
+    res.writeHead(status, { 'Access-Control-Allow-Origin': '*', 'Content-Type': version.mimeType, 'Content-Length': end - start + 1, 'Accept-Ranges': 'bytes',
       'Content-Security-Policy': "default-src 'none'; sandbox", 'X-Content-Type-Options': 'nosniff',
-      ...(url.searchParams.has('download') ? { 'Content-Disposition': `attachment; filename="${version.filename}"` } : {}) });
+      ...(url.searchParams.has('download') ? { 'Content-Disposition': attachmentDisposition(downloadName, plainDownloadName) } : {}) });
     if (req.method === 'HEAD') res.end();
     else await pipeline(file.createReadStream({ start, end, autoClose: false }), res);
   } finally { await file.close(); }

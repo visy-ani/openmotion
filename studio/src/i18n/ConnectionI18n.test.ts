@@ -2,7 +2,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import page from '../../../web/connect.html?raw';
 import { mountConnection } from '../../../web/connect';
-import { dictionaries, languages, translate, type Locale } from './messages';
+import { languages, translate, type Locale } from './messages';
+import { dictionaries } from './sourceCatalog';
 
 let controller: ReturnType<typeof mountConnection> | undefined;
 afterEach(() => { controller?.destroy(); controller = undefined; document.body.replaceChildren(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });

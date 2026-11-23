@@ -13,8 +13,10 @@ import { studioSkillDefaults, localizedSkillPrompt, skillShotPrompt, aspectRatio
 import type { AssetDraft } from './AssetComposer';
 import { mediaEditorDestination, studioIconTone, studioComingSoon, type StudioDestination } from './creativeStudios';
 import { useOptionalWorkspaceChrome } from './WorkspaceChromeContext';
+import { buildSuperAgentHandoff } from '../../../shared/capability-hub';
 import { StudioTemplateShelf } from './StudioTemplateShelf';
 import { SkillMedia } from './SkillMedia';
+import { ComingSoonGuide } from './ComingSoonGuide';
 import { GitHubMark } from '../../../packages/design-system/react/GitHubMark';
 import { MotionIcon } from './icons';
 import { motionApi } from './useWorkspace';
@@ -169,7 +171,7 @@ export function SkillsPage({ skillId, onSkillChange, routeCategory, onCategoryCh
       <main className="om-gallery-results">
         {studio ? <section className="om-specialty-intro" data-coming-soon={comingSoon || undefined}>
           <div><h1 className="om-title"><span className="om-studio-heading-icon" data-tone={studioIconTone(studio)}><RemixIcon name={studio.icon} size={24} /></span>{t(studio.title)}</h1><p className="om-muted">{t(studio.briefHint)}</p>
-            {comingSoon ? <p className="om-specialty-status" lang="en">Coming soon</p> : onCreate && <div className="om-specialty-actions">
+            {comingSoon ? <ComingSoonGuide compact /> : onCreate && <div className="om-specialty-actions">
               <Button variant="ghost" className="om-button h-auto" data-primary onClick={() => onCreate(mediaEditorDestination(studio.scenes[0]))}><RemixIcon name="add-line" size={16} />{t(studio.createLabel)}</Button>
               {studio.id === 'marketing' && <Button variant="ghost" className="om-button h-auto" onClick={() => onCreate(mediaEditorDestination('text-to-video'))}>{t('Create an ad clip')}</Button>}
             </div>}
@@ -234,6 +236,7 @@ export function SkillsPage({ skillId, onSkillChange, routeCategory, onCategoryCh
           ? <p className="om-muted">{t('Use the Agent brief to work with this recording. Clip generation accepts a still image as its first frame.')}</p>
           : <Button variant="ghost" className="om-button h-auto" data-primary onClick={startShot}><RemixIcon name="film-line" size={16} />{t('Create a shot from this brief')}</Button>)}
         <div className="om-skill-actions">
+          {chrome?.openInSuperAgent && <Button variant="ghost" className="om-button h-auto" onClick={() => chrome.openInSuperAgent!(buildSuperAgentHandoff({ kind: 'skill', id: selected.id, title: displayName(selected), subtitle: t(selected.tagline) }, { prompt: parameters.subject.trim() ? prompt : undefined, locale }))}><RemixIcon name="sparkling-line" size={16} />{t('Run in Super Agent')}</Button>}
           <Button variant="ghost" className="om-button h-auto" data-primary={!canCreateShot || undefined} onClick={() => void copy()}><RemixIcon name="file-copy-line" size={16} />{t('Copy for Agent')}</Button>
           <Popover open={commandOpen} onOpenChange={open => { setCommandOpen(open); setManualCopy(null); if (open) tracking.reportSkillDetailClick(selected, 'open_command', detailView.current); }} side="top" align="end" aria-label={t('Use in another AI Agent')} className="om-skill-shortcut"
             trigger={<Button variant="ghost" className="om-button h-auto"><RemixIcon name="plug-line" size={16} />{t('Connect Agent')}</Button>}>

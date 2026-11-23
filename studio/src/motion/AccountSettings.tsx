@@ -55,7 +55,7 @@ function GuideCapabilities() {
 
 function GuideOffer({ callout = false }: { callout?: boolean }) {
   const { t } = useI18n(), offer = activeAccountOffer();
-  return offer && <p className={callout ? 'om-account-offer om-account-offer-callout' : 'om-account-offer'}><RemixIcon name="sparkling-fill" size={15} /><strong>{t(offer.title)}</strong><span>{t(offer.detail)}</span></p>;
+  return offer && <p className={callout ? 'om-account-offer om-account-offer-callout' : 'om-account-offer'}><RemixIcon name="sparkling-fill" size={15} /><strong>{t(offer.title)}</strong>{offer.detail && <span>{t(offer.detail)}</span>}</p>;
 }
 
 /** Signed-out guide shared by the account page and the OpenDesign provider: what signing in unlocks. */

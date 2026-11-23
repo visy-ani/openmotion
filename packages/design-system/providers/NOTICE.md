@@ -30,4 +30,4 @@ reuse the glyphs in the repository's model badges. The original paths and
 colors come from Lobe Icons static SVG package 1.102.0 under the included MIT
 license. The corresponding badge for each glyph is listed in `sources.json`.
 
-Local Agent artwork additions (Kimi, Cursor, Kiro, Kilo, Hermes, Devin, Antigravity, Amp, CodeBuddy, Qoder, Trae and Cline) come from the MIT-licensed [Lobe Icons static SVG collection](https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons), retrieved 2026-11-15. The existing Lobe Icons license applies. Agents without published artwork use a neutral letter mark rather than a different brand.
+Local Agent artwork additions (Kimi, Cursor, Kiro, Kilo, Hermes, Devin, Antigravity, Amp, CodeBuddy, Qoder, Trae, Cline and Pi) come from the MIT-licensed [Lobe Icons static SVG collection](https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons), retrieved 2026-11-15. The existing Lobe Icons license applies. Agents without published artwork use a neutral letter mark rather than a different brand.

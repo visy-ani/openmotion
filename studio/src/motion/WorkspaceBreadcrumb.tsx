@@ -1,18 +1,21 @@
+import { findScenario } from '../../../shared/scenarios';
 import { exploreCommunities } from '../../../shared/studio-catalog';
 import { useI18n } from '../i18n/I18n';
 import { RemixIcon } from '../icons/RemixIcons';
 import { restoreWorkspaceSource, type WorkspaceSource } from '../utils/workspaceHistory';
-import { settingsSectionLabel } from './SettingsCenter';
+import { settingsSectionLabel } from './settingsMeta';
 import { readWorkspacePage } from './workspacePageRouting';
 
 function sourceLabel(href: string): string {
   const url = new URL(href);
-  const page = readWorkspacePage(url.search, url.hash);
+  const page = readWorkspacePage(url.search, url.hash, url.pathname);
   if (page.creators) return 'Creators';
   if (page.templates || page.template) return 'Template library';
   if (page.settings === 'mcp') return 'MCP';
   if (page.settings === 'brand-kit') return 'Brand Kit';
   if (page.settings) return settingsSectionLabel(page.settings);
+  if (page.scenario) return findScenario(page.scenario)?.title ?? 'Workflows';
+  if (page.scenarioHub) return 'Workflows';
   if (page.studio) return page.studio.scene.label;
   if (page.designScene) return 'Design Studio';
   if (page.modelOverview || page.modelHub) return 'Model details';

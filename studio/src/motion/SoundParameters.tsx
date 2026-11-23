@@ -9,7 +9,7 @@ import { Tooltip } from '../components/ui/Tooltip';
 import { useI18n } from '../i18n/I18n';
 import { RemixIcon } from '../icons/RemixIcons';
 import { requestParameters, type ParameterDraft } from './GenerationParameters';
-import { DURATION_PRESETS, SFX_DURATION_PRESETS, SPEED_PRESETS, parseVoiceChoice } from './soundPresets';
+import { DURATION_PRESETS, SFX_DURATION_PRESETS, SPEED_PRESETS, parseVoiceChoice, voiceCharacterDetail } from './soundPresets';
 import type { SoundLiveTabId } from './soundTabs';
 import { voicePreviewTrackId, type VoicePreviewController } from './voicePreviews';
 
@@ -38,6 +38,25 @@ function updateFieldValue(draft: ParameterDraft, field: GenerationOption, next: 
   return { ...draft, values };
 }
 
+function selectFeaturedVoices<T extends { value: string; detail: string }>(voices: readonly T[], activeValue: string): T[] {
+  if (voices.length <= 8) return [...voices];
+  const female = voices.filter(v => /\bfemale\b/i.test(v.detail));
+  const male = voices.filter(v => /\bmale\b/i.test(v.detail));
+  const base: T[] = [];
+  for (const item of [...female.slice(0, 2), ...male.slice(0, 2)]) {
+    if (!base.some(existing => existing.value === item.value)) base.push(item);
+  }
+  for (const item of voices) {
+    if (base.length >= 4) break;
+    if (!base.some(existing => existing.value === item.value)) base.push(item);
+  }
+  if (activeValue && !base.some(v => v.value === activeValue)) {
+    const matched = voices.find(v => v.value === activeValue);
+    if (matched) return [...base.slice(0, 3), matched];
+  }
+  return base;
+}
+
 export function SoundParameters({
   tabId,
   model,
@@ -56,6 +75,7 @@ export function SoundParameters({
   const { t } = useI18n();
   const idPrefix = useId();
   const [customVoiceOpen, setCustomVoiceOpen] = useState(false);
+  const [customVoiceInput, setCustomVoiceInput] = useState('');
   const { fields, primaryFields, valueOf } = resolveParameterState(model, draft);
 
   if (primaryFields.length === 0) return null;
@@ -89,46 +109,40 @@ export function SoundParameters({
       );
     }
 
-    const parsed = (field.choices ?? []).map(choice => ({
-      ...parseVoiceChoice(choice),
-      previewUrl: choice.previewUrl,
-    }));
+    const parsed = (field.choices ?? []).map(choice => {
+      const base = parseVoiceChoice(choice);
+      return {
+        ...base,
+        detail: voiceCharacterDetail(base.value, base.detail),
+        previewUrl: choice.previewUrl,
+      };
+    });
     const compactGrid = parsed.length <= 8;
-    const featured = compactGrid ? parsed : parsed.slice(0, 4);
-    const selectedVoice = parsed.find(voice => voice.value === currentStr);
-    const selectedPreview = selectedVoice ? voicePreview?.resolve(model, selectedVoice) : undefined;
-    const selectedTrackId = selectedVoice ? voicePreviewTrackId(model.id, selectedVoice.value) : undefined;
-    const selectedIsCurrent = Boolean(selectedTrackId && voicePreview?.activeTrackId === selectedTrackId);
-    const selectedIsPlaying = selectedIsCurrent && Boolean(voicePreview?.playing);
-    const selectedIsLoading = selectedIsCurrent && Boolean(voicePreview?.loading);
+    const featured = selectFeaturedVoices(parsed, currentStr);
     const isCustomVoice = Boolean(
       field.allowCustom
       && currentStr.trim()
       && !(field.choices ?? []).some(choice => String(choice.value) === currentStr),
     );
+    const customBoxExpanded = customVoiceOpen || isCustomVoice;
 
     return (
       <div className="om-sound-param-field" key={field.key}>
         <div className="om-sound-param-head">
           <span className="om-sound-field-label">{t('Voice')}</span>
-          <div className="om-sound-param-head-meta">
-            <span className="om-badge om-sound-voice-model-badge">{model.label}</span>
-            {isCustomVoice && <span className="om-badge">{t('Custom voice')}</span>}
-            {Object.hasOwn(draft.values, field.key) && (
-              <IconButton
-                type="button"
-                variant="plain"
-                className="om-nav-item om-sound-reset-icon"
-                aria-label={t('Reset {name}', { name: t(field.label) })}
-                disabled={disabled}
-                onClick={() => setField(field, undefined)}
-                icon={<RemixIcon name="refresh-line" size={13} />}
-              />
-            )}
-          </div>
+          {isCustomVoice && (
+            <div className="om-sound-param-head-meta">
+              <span className="om-badge">{t('Custom voice')}</span>
+            </div>
+          )}
         </div>
 
-        <div className="om-sound-voice-grid" role="group" aria-label={t(field.label)}>
+        <div
+          className="om-sound-voice-grid"
+          data-columns={featured.length === 1 ? '1' : undefined}
+          role="group"
+          aria-label={t(field.label)}
+        >
           {featured.map(voice => {
             const active = currentStr === voice.value;
             const previewSource = voicePreview?.resolve(model, voice);
@@ -153,21 +167,23 @@ export function SoundParameters({
                   disabled={disabled}
                   onClick={() => {
                     setCustomVoiceOpen(false);
+                    setCustomVoiceInput('');
                     setField(field, voice.value);
                   }}
                 >
-                  <span className="om-sound-voice-avatar" aria-hidden="true">{voice.initials}</span>
                   <span className="om-sound-voice-copy">
                     <strong>{voice.name}</strong>
                     {voice.detail && <small>{t(voice.detail)}</small>}
                   </span>
                 </Button>
-                {previewSource ? (
+                {previewSource && (
                   <Tooltip label={previewLabel}>
                     <IconButton
                       type="button"
                       variant="plain"
                       className="om-sound-voice-preview"
+                      data-playing={isPlaying || undefined}
+                      data-loading={isLoading || undefined}
                       aria-label={previewLabel}
                       aria-pressed={isPlaying}
                       disabled={disabled}
@@ -176,14 +192,12 @@ export function SoundParameters({
                         <RemixIcon
                           name={isLoading ? 'loader-4-line' : isPlaying ? 'pause-fill' : 'play-fill'}
                           size={13}
-                          className={isLoading ? 'animate-spin motion-reduce:animate-none' : undefined}
+                          className={isLoading ? 'animate-spin motion-reduce:animate-none' : !isPlaying ? 'om-sound-play-glyph' : undefined}
                         />
                       }
                     />
                   </Tooltip>
-                ) : active ? (
-                  <RemixIcon name="check-line" size={14} className="om-sound-voice-check" />
-                ) : null}
+                )}
               </div>
             );
           })}
@@ -197,6 +211,7 @@ export function SoundParameters({
               value={currentStr || '__auto'}
               onCommit={next => {
                 setCustomVoiceOpen(false);
+                setCustomVoiceInput('');
                 setField(field, next === '__auto' ? undefined : next);
               }}
               options={[
@@ -207,31 +222,11 @@ export function SoundParameters({
                 })),
               ]}
             />
-            {selectedVoice && selectedPreview && (
-              <Tooltip label={t(selectedIsPlaying ? 'Pause {name}' : 'Preview {name}', { name: selectedVoice.name })}>
-                <IconButton
-                  type="button"
-                  variant="plain"
-                  className="om-sound-voice-preview om-sound-voice-select-preview"
-                  aria-label={t(selectedIsPlaying ? 'Pause {name}' : 'Preview {name}', { name: selectedVoice.name })}
-                  aria-pressed={selectedIsPlaying}
-                  disabled={disabled}
-                  onClick={() => voicePreview?.toggle(model, selectedVoice)}
-                  icon={
-                    <RemixIcon
-                      name={selectedIsLoading ? 'loader-4-line' : selectedIsPlaying ? 'pause-fill' : 'play-fill'}
-                      size={14}
-                      className={selectedIsLoading ? 'animate-spin motion-reduce:animate-none' : undefined}
-                    />
-                  }
-                />
-              </Tooltip>
-            )}
           </div>
         )}
 
         {field.allowCustom && (
-          customVoiceOpen || isCustomVoice ? (
+          customBoxExpanded ? (
             <div className="om-sound-custom-voice-box">
               <div className="om-sound-param-head">
                 <label className="om-sound-field-label" htmlFor={`${idPrefix}-custom-voice`}>
@@ -245,6 +240,7 @@ export function SoundParameters({
                   disabled={disabled}
                   onClick={() => {
                     setCustomVoiceOpen(false);
+                    setCustomVoiceInput('');
                     if (isCustomVoice) setField(field, undefined);
                   }}
                   icon={<RemixIcon name="close-line" size={13} />}
@@ -256,9 +252,12 @@ export function SoundParameters({
                   aria-label={t('Custom voice ID')}
                   disabled={disabled}
                   placeholder={t('Optional provider voice ID')}
-                  value={isCustomVoice ? currentStr : ''}
+                  value={customVoiceOpen ? customVoiceInput : (isCustomVoice ? currentStr : '')}
                   onChange={event => {
-                    const next = event.target.value.trim();
+                    const raw = event.target.value;
+                    setCustomVoiceInput(raw);
+                    if (!customVoiceOpen) setCustomVoiceOpen(true);
+                    const next = raw.trim();
                     setField(field, next || undefined);
                   }}
                 />
@@ -270,7 +269,10 @@ export function SoundParameters({
               variant="plain"
               className="om-nav-item om-sound-custom-voice-toggle"
               disabled={disabled}
-              onClick={() => setCustomVoiceOpen(true)}
+              onClick={() => {
+                setCustomVoiceInput(isCustomVoice ? currentStr : '');
+                setCustomVoiceOpen(true);
+              }}
             >
               <RemixIcon name="add-line" size={13} />
               <span>{t('Custom voice ID')}</span>
@@ -291,7 +293,7 @@ export function SoundParameters({
           <label className="om-sound-field-label" htmlFor={`${idPrefix}-${field.key}`}>
             {t('Duration')}
           </label>
-          <span className="om-sound-mono-readout">{currentNum !== undefined ? `${currentNum}s` : t('Auto')}</span>
+          {currentNum !== undefined && <span className="om-sound-mono-readout">{currentNum}s</span>}
         </div>
         <div className="om-sound-duration-row">
           <div className="om-sound-pill-group" role="group" aria-label={t(field.label)}>
@@ -328,7 +330,7 @@ export function SoundParameters({
               max={field.max}
               step={field.step ?? 1}
               disabled={disabled}
-              placeholder={t('Auto')}
+              placeholder="--"
               value={currentNum ?? ''}
               onChange={event => setField(field, event.target.value === '' ? undefined : Number(event.target.value))}
             />

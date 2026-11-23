@@ -149,9 +149,16 @@ it('keeps a dismissal for the day in the page when storage is unavailable', () =
   setItem.mockRestore();
 });
 
-it('keeps the Pricing entry plain before the campaign starts', () => {
+it('keeps the Pricing entry with localized Free credits badge before the campaign starts', () => {
   vi.setSystemTime(BLACK_FRIDAY_STARTS_AT - 60_000);
   render(<PricingEntry trackingPage="studio" />);
   expect(container.textContent).not.toContain('50% OFF');
+  expect(container.textContent).toContain(campaignUi['zh-CN']['Free credits']);
   expect(params(container.querySelector<HTMLAnchorElement>('a')!.href).has('utm_campaign')).toBe(false);
+  act(() => root.render(<I18nProvider key="en" initialLocale="en"><PricingEntry trackingPage="studio" /></I18nProvider>));
+  expect(container.textContent).toContain('Free credits');
+  for (const locale of ['zh-CN', 'ja', 'ko', 'de', 'fr', 'ru', 'es', 'pt-BR', 'it', 'tr'] as const) {
+    act(() => root.render(<I18nProvider key={locale} initialLocale={locale}><PricingEntry trackingPage="studio" /></I18nProvider>));
+    expect(container.textContent).toContain(campaignUi[locale]['Free credits']);
+  }
 });

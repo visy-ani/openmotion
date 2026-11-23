@@ -2,7 +2,9 @@ import { Button } from 'open-design-ui/button';
 import { IconButton } from 'open-design-ui/icon-button';
 import { useEffect, useId, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { GenerationJob, Model } from '../../../shared/gateway';
+import { generationOptions, resolveGenerationParameters } from '../../../shared/generation-options';
 import { Skeleton } from '../components/ui/Skeleton';
+import { Tooltip } from '../components/ui/Tooltip';
 import { useI18n } from '../i18n/I18n';
 import { RemixIcon } from '../icons/RemixIcons';
 import type { AssetDraft } from './AssetComposer';
@@ -126,6 +128,13 @@ export function SoundComposer({
     const studioContext = { studio: studio.destination.studio.id, scene: tabId, model: selected.id };
     try {
       const parsed = requestParameters(parameters, selected, false);
+      const effectiveVoice = selected.mode === 'text-to-speech' && !parsed.voice
+        ? resolveGenerationParameters(selected, parsed, false).voice
+          ?? (selected.generationOptions ?? generationOptions(selected))?.fields.find(f => f.key === 'voice')?.default
+        : undefined;
+      const submitParams = typeof effectiveVoice === 'string' && effectiveVoice.trim()
+        ? { ...parsed, voice: effectiveVoice }
+        : parsed;
       const result = await assetRequest<{ job: GenerationJob }>({
         action: 'generate',
         requestId: crypto.randomUUID(),
@@ -133,11 +142,11 @@ export function SoundComposer({
         prompt: draft.prompt,
         model: selected.id,
         mode: selected.mode,
-        parameters: parsed,
+        parameters: submitParams,
         references: [],
       });
       if (mounted.current) {
-        setDraft(current => current === draft ? { ...current, model: selected.id, parameters: parsed } : current);
+        setDraft(current => current === draft ? { ...current, model: selected.id, parameters: submitParams } : current);
         onCreated(result.job);
       }
       tracking.reportAssetGenerationSubmit('audio', 'success', 0, false, studioContext);
@@ -158,9 +167,8 @@ export function SoundComposer({
     }
   };
 
-  const modelHeading = (
-    <div className="om-creation-row">
-      <span className="om-eyebrow">{t('Model')}</span>
+  const settingsButton = (
+    <Tooltip label={t('Model providers')}>
       <IconButton
         type="button"
         variant="plain"
@@ -169,6 +177,20 @@ export function SoundComposer({
         onClick={openModelSettings}
         icon={<RemixIcon name="settings-3-line" size={14} />}
       />
+    </Tooltip>
+  );
+
+  const providerHeading = (
+    <div className="om-creation-row">
+      <span className="om-eyebrow">{t('Provider')}</span>
+      {settingsButton}
+    </div>
+  );
+
+  const fallbackModelHeading = (
+    <div className="om-creation-row">
+      <span className="om-eyebrow">{t('Model')}</span>
+      {settingsButton}
     </div>
   );
 
@@ -298,7 +320,8 @@ export function SoundComposer({
                 models={compatible}
                 providers={gateway.status.providers}
                 selected={preferred}
-                modelHeading={modelHeading}
+                providerHeading={providerHeading}
+                modelHeading={<span className="om-eyebrow">{t('Model')}</span>}
                 disabled={busy}
                 onChoose={model => studio.chooseModel(model)}
                 onManageProviders={openModelSettings}
@@ -308,7 +331,7 @@ export function SoundComposer({
               />
             ) : (
               <>
-                {modelHeading}
+                {fallbackModelHeading}
                 {failed ? (
                   <Button type="button" variant="ghost" className="om-button h-auto" onClick={retry}>
                     <RemixIcon name="refresh-line" size={16} />

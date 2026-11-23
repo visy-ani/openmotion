@@ -139,9 +139,10 @@ export function trackStudioFeedbackDismissed(
  * The booking link offered after a response. Its own event because the thing
  * worth measuring is the click, and a link is otherwise invisible to us.
  */
-export function trackStudioFeedbackInterviewClick(ctx: { reason: string }): void {
+export function trackStudioFeedbackInterviewClick(ctx: { reason: string; render_id?: string }): void {
   trackEvent("studio_feedback_interview_click", {
     reason: ctx.reason,
+    render_id: ctx.render_id,
     source: "studio",
   });
 }

@@ -105,6 +105,12 @@ test('every workflow document and linked reference is reachable over MCP with ca
     assert.equal(returned.get('skills/openmotion-video-to-template/SKILL.md').status, 'ready');
     assert.equal(returned.get('skills/openmotion-video-to-template/SKILL.md').workflow, 'video-to-template');
     for (const route of workflows) {
+      if (route === 'game') {
+        const refs = returned.get(workflowRegistry.game.sections.start).references;
+        assert.ok(refs.some((reference: { documentId: string }) => reference.documentId === 'skills/openmotion-game/references/game-flow.md'));
+        assert.ok(refs.some((reference: { documentId: string }) => reference.documentId === 'skills/openmotion-game/references/game-stylization.md'));
+        continue;
+      }
       assert.ok(returned.get(workflowRegistry[route as keyof typeof workflowRegistry].sections.start).references.some((reference: { documentId: string }) =>
         reference.documentId === 'skills/openmotion-production/references/edit.md'), `${route} must expose the shared edit workflow`);
       assert.ok(returned.get(workflowRegistry[route as keyof typeof workflowRegistry].sections.start).references.some((reference: { documentId: string }) =>

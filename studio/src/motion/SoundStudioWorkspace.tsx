@@ -2,7 +2,11 @@ import { Button } from 'open-design-ui/button';
 import { IconButton } from 'open-design-ui/icon-button';
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { assetMediaUrl, assetVersion, type AssetVersion, type LibraryAsset } from '../../../shared/asset-library';
+import { classifyAudioKind, type AudioKind } from '../../../shared/audio-kind';
 import { resumableJob, type GenerationJob, type Model } from '../../../shared/gateway';
+import { generationOptions } from '../../../shared/generation-options';
+import { formatDuration } from '../components/sidebar/assetHelpers';
+import { Menu, MenuItem, MenuSeparator } from '../components/ui/Menu';
 import { Select } from '../components/ui/Select';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Tooltip } from '../components/ui/Tooltip';
@@ -23,6 +27,7 @@ import {
   deterministicWaveform,
   estimateSpeechSeconds,
   resampleWaveform,
+  resolveAudioModelLabel,
   resolveSavedVoiceName,
   type SoundSfxStarter,
 } from './soundPresets';
@@ -30,41 +35,34 @@ import {
   SOUND_TABS,
   classifyAudioTrackTab,
   findSoundTab,
+  isSfxModel,
   type SoundLiveTabId,
   type SoundTabDefinition,
   type SoundTabId,
 } from './soundTabs';
-import { buildVoicePreviewTrack, resolveVoicePreview, type VoicePreviewController } from './voicePreviews';
+import { ComingSoonGuide } from './ComingSoonGuide';
+import { dayKey } from './generationLabels';
+import { GeneratingWaveform, InteractiveWaveform } from './SoundWaveforms';
+import { useAudioWaveforms } from './useAudioWaveforms';
+import { useVoiceAudition } from './voicePreviews';
 import './soundStudio.css';
 
-type AudioTypeFilter = 'all' | SoundLiveTabId;
+type AudioTypeFilter = 'all' | AudioKind;
+
+const AUDIO_KIND_ICON: Record<AudioKind, string> = {
+  music: 'music-2-line',
+  sfx: 'flashlight-line',
+  speech: 'voiceprint-line',
+  upload: 'upload-2-line',
+};
 
 type StreamEntry =
   | { kind: 'job'; id: string; createdAt: number; job: GenerationJob }
   | { kind: 'track'; id: string; createdAt: number; track: SoundPlayableTrack };
 
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let size = bytes;
-  let unit = 0;
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024;
-    unit++;
-  }
-  return `${Number(size.toFixed(1))} ${units[unit]}`;
-}
-
-function dayKey(timestamp: number): string {
-  const date = new Date(timestamp);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function modelLabelForVersion(studio: StudioCreation, modelId?: string): string | undefined {
-  if (!modelId) return undefined;
-  const matched = studio.catalog.catalog?.models.find(m => m.id === modelId);
-  if (matched) return matched.label;
-  return modelId.includes(':') ? modelId.slice(modelId.indexOf(':') + 1) : modelId;
+function formatTrackDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '--:--';
+  return formatDuration(seconds) || formatTime(seconds);
 }
 
 function buildAssetTrack(
@@ -73,11 +71,15 @@ function buildAssetTrack(
   studio: StudioCreation,
   t: (s: string) => string,
 ): SoundPlayableTrack {
-  const modelLabel = modelLabelForVersion(studio, version.model);
-  const voiceName = resolveSavedVoiceName(version.parameters?.voice, version.model, studio.catalog.catalog?.models);
+  const models = studio.catalog.catalog?.models;
+  const kind = classifyAudioTrackTab(version.model, models, version.source, version.audioKind);
+  const modelLabel = resolveAudioModelLabel(version.model, models);
+  const voiceName = kind === 'speech'
+    ? resolveSavedVoiceName(version.parameters?.voice, version.model, models, true)
+    : undefined;
   const subtitleParts = [
-    modelLabel ?? (version.source === 'upload' ? t('Local upload') : ''),
     voiceName,
+    modelLabel ?? (version.source === 'upload' ? t('Local upload') : ''),
   ].filter(Boolean);
   return {
     id: `asset:${asset.id}/${version.id}`,
@@ -85,7 +87,9 @@ function buildAssetTrack(
     title: asset.name,
     subtitle: subtitleParts.join(' · '),
     src: assetMediaUrl(asset.id, version.id),
-    waveform: deterministicWaveform(`${asset.id}:${version.id}:${version.sha256}`, 44),
+    waveform: version.waveform?.length
+      ? resampleWaveform(version.waveform, 128)
+      : deterministicWaveform(`${asset.id}:${version.id}:${version.sha256}`, 128),
     durationHint: version.duration,
     prompt: version.prompt,
     downloadUrl: `${assetMediaUrl(asset.id, version.id)}?download=1`,
@@ -94,97 +98,26 @@ function buildAssetTrack(
   };
 }
 
+function parameterDraftFromParams(params: Record<string, unknown>, model?: Model): ParameterDraft {
+  const structuredKeys = new Set(model ? (generationOptions(model, false)?.fields.map(field => field.key) ?? []) : []);
+  const values: Record<string, unknown> = {};
+  const extra: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    if (structuredKeys.has(key)) values[key] = value;
+    else extra[key] = value;
+  }
+  return {
+    values,
+    advanced: Object.keys(extra).length > 0 ? JSON.stringify(extra, null, 2) : '{}',
+  };
+}
+
 function isEditableElement(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-}
-
-function InteractiveWaveform({
-  bars,
-  progress,
-  active,
-  label,
-  onSeek,
-}: {
-  bars: readonly number[];
-  progress: number;
-  active: boolean;
-  label: string;
-  onSeek: (ratio?: number) => void;
-}) {
-  const width = bars.length * 6;
-  const clamped = Math.max(0, Math.min(1, progress));
-  const playheadX = Math.max(1.5, Math.min(width - 2.5, clamped * width));
-
-  return (
-    <Button
-      type="button"
-      variant="plain"
-      className="om-sound-waveform-btn"
-      data-active={active || undefined}
-      aria-label={label}
-      onClick={event => {
-        if (event.detail === 0) {
-          onSeek(undefined);
-          return;
-        }
-        const rect = event.currentTarget.getBoundingClientRect();
-        const ratio = rect.width > 0 ? Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) : undefined;
-        onSeek(ratio);
-      }}
-    >
-      <svg viewBox={`0 0 ${width} 100`} preserveAspectRatio="none" aria-hidden="true">
-        {bars.map((height, index) => {
-          const played = active && clamped > 0 && index / bars.length <= clamped;
-          return (
-            <rect
-              key={index}
-              x={index * 6 + 1}
-              y={(100 - height) / 2}
-              width={3.5}
-              height={height}
-              rx={1.75}
-              data-played={played || undefined}
-            />
-          );
-        })}
-        {active && (
-          <rect
-            className="om-sound-playhead"
-            x={playheadX}
-            y={4}
-            width={2.5}
-            height={92}
-            rx={1.25}
-          />
-        )}
-      </svg>
-    </Button>
-  );
-}
-
-function GeneratingWaveform({ seed }: { seed: string }) {
-  const bars = useMemo(() => deterministicWaveform(`gen:${seed}`, 44), [seed]);
-  const width = bars.length * 6;
-  return (
-    <div className="om-sound-wave-generating" aria-hidden="true">
-      <svg viewBox={`0 0 ${width} 100`} preserveAspectRatio="none">
-        {bars.map((height, index) => (
-          <rect
-            key={index}
-            x={index * 6 + 1}
-            y={(100 - height) / 2}
-            width={3.5}
-            height={height}
-            rx={1.75}
-            style={{ animationDelay: `${(index % 14) * 90}ms` }}
-          />
-        ))}
-      </svg>
-    </div>
-  );
 }
 
 function SoundGeneratingRow({
@@ -203,7 +136,7 @@ function SoundGeneratingRow({
   const saving = job.phase === 'downloading' || job.phase === 'saving';
   const reconnecting = working && job.phase === 'reconnecting';
   const voiceName = resolveSavedVoiceName(job.parameters?.voice, job.model.id, models, true);
-  const tabKind = classifyAudioTrackTab(job.model.id, models);
+  const tabKind = classifyAudioKind(job.model.id, job.model.mode, 'generated', `${job.model.modelId} ${job.model.label}`);
   const primaryTitle = voiceName
     ?? (tabKind === 'sfx' ? t('Sound effects') : tabKind === 'speech' ? t('Speech') : t('Music'));
 
@@ -237,7 +170,7 @@ function SoundGeneratingRow({
         <GeneratingWaveform seed={job.id} />
       </div>
 
-      <span className="om-badge om-sound-row-model">{job.model.label}</span>
+      <span className="om-badge om-sound-row-model">{resolveAudioModelLabel(job.model.id, models) ?? job.model.label}</span>
 
       <div className="om-sound-row-actions">
         <Tooltip label={t('Recreate')}>
@@ -398,11 +331,9 @@ function SoundFailedRow({
 
 function SoundSoonPreview({
   tab,
-  trackCount,
   onPivot,
 }: {
   tab: SoundTabDefinition;
-  trackCount: number;
   onPivot: (target: SoundLiveTabId) => void;
 }) {
   const { t } = useI18n();
@@ -445,11 +376,7 @@ function SoundSoonPreview({
         )}
 
         <div className="om-sound-soon-footer">
-          {trackCount > 0 && (
-            <span className="om-sound-mono-readout">
-              {t('{count} tracks', { count: trackCount })}
-            </span>
-          )}
+          <ComingSoonGuide compact showStatus={false} />
           {pivot && (
             <Button
               type="button"
@@ -526,23 +453,50 @@ export function SoundStudioWorkspace({
   const pendingLocateIdRef = useRef<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [locatedTrackId, setLocatedTrackId] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<AudioTypeFilter>('all');
+  const [localTypeFilter, setLocalTypeFilter] = useState<AudioTypeFilter>('all');
+  const hasServerAudioKind = typeof browser.setAudioKind === 'function';
+  const typeFilter: AudioTypeFilter = hasServerAudioKind ? (browser.audioKind ?? 'all') : localTypeFilter;
+  const setTypeFilter = useCallback((next: AudioTypeFilter) => {
+    if (hasServerAudioKind) browser.setAudioKind(next);
+    else setLocalTypeFilter(next);
+  }, [hasServerAudioKind, browser]);
+  const [seenSources, setSeenSources] = useState<{ generated: boolean; upload: boolean }>({ generated: false, upload: false });
   const [sessionJobIds, setSessionJobIds] = useState<string[]>([]);
   const [dismissedJobIds, setDismissedJobIds] = useState<Set<string>>(() => new Set());
+  const { selected: selectedModel, preferred: preferredModel } = resolveSoundModels(studio, liveTab);
+  const activeModel = selectedModel ?? preferredModel;
+  const models = studio.catalog.catalog?.models;
+  const initialParamModel = draft.model ? models?.find(model => model.id === draft.model) : activeModel;
+  const currentDraftKey = studio.draftKey ?? `sound/${activeTab}`;
+
   const [parameterDrafts, setParameterDrafts] = useState<Record<string, ParameterDraft>>(() =>
-    draft.model && draft.parameters
-      ? { [draft.model]: { values: { ...draft.parameters }, advanced: '{}' } }
+    initialParamModel && draft.parameters && Object.keys(draft.parameters).length > 0
+      ? { [initialParamModel.id]: parameterDraftFromParams(draft.parameters, initialParamModel) }
       : {},
   );
+  const seededDraftKeyRef = useRef<string | undefined>(
+    !draft.parameters || Object.keys(draft.parameters).length === 0 || initialParamModel
+      ? currentDraftKey
+      : undefined,
+  );
 
-  // Sync parameter draft when cross-tab initial draft brings explicit parameters.
+  // Seed parameter drafts once per draftKey transition (e.g. cross-tab starter or Recreate),
+  // splitting structured fields from raw Advanced JSON so local JSON edits never leak into values.
   useEffect(() => {
-    if (!draft.model || !draft.parameters || Object.keys(draft.parameters).length === 0) return;
-    setParameterDrafts(current => {
-      if (current[draft.model!]) return current;
-      return { ...current, [draft.model!]: { values: { ...draft.parameters }, advanced: '{}' } };
-    });
-  }, [draft.model, draft.parameters]);
+    if (seededDraftKeyRef.current === currentDraftKey) return;
+    if (!draft.parameters || Object.keys(draft.parameters).length === 0) {
+      seededDraftKeyRef.current = currentDraftKey;
+      return;
+    }
+    const targetModel = (draft.model ? models?.find(model => model.id === draft.model) : undefined) ?? activeModel;
+    if (!targetModel) return;
+    seededDraftKeyRef.current = currentDraftKey;
+    const seeded = parameterDraftFromParams(draft.parameters, targetModel);
+    setParameterDrafts(current => ({
+      ...current,
+      [targetModel.id]: seeded,
+    }));
+  }, [currentDraftKey, draft.model, draft.parameters, models, activeModel]);
 
   // Track any active audio job observed on screen so reload-recovered jobs transition cleanly
   // in-place to either their completed track row (with New badge) or an inline failed row.
@@ -557,10 +511,6 @@ export function SoundStudioWorkspace({
     });
   }, [jobs]);
 
-  const { selected: selectedModel, preferred: preferredModel } = resolveSoundModels(studio, liveTab);
-  const activeModel = selectedModel ?? preferredModel;
-  const models = studio.catalog.catalog?.models;
-
   const featuredRecipe = SOUND_MUSIC_RECIPES[0];
   const featuredDemoTrack: SoundPlayableTrack = useMemo(() => ({
     id: `demo:${featuredRecipe.id}`,
@@ -569,16 +519,33 @@ export function SoundStudioWorkspace({
     subtitle: '',
     src: featuredRecipe.audio!,
     blobSource: true,
-    waveform: resampleWaveform(featuredRecipe.waveform ?? [], 44),
+    waveform: resampleWaveform(featuredRecipe.waveform ?? [], 128),
     durationHint: featuredRecipe.durationSeconds,
     prompt: t(featuredRecipe.prompt),
   }), [t]);
 
   const assets = browser.data?.assets ?? [];
+  useEffect(() => {
+    if (!assets.length) return;
+    const hasGen = assets.some(asset => assetVersion(asset)?.source === 'generated');
+    const hasUp = assets.some(asset => assetVersion(asset)?.source === 'upload');
+    setSeenSources(prev => (
+      (prev.generated || !hasGen) && (prev.upload || !hasUp)
+        ? prev
+        : { generated: prev.generated || hasGen, upload: prev.upload || hasUp }
+    ));
+  }, [assets]);
+
   const allAssetTracks = useMemo(() => assets.flatMap(asset => {
     const version = assetVersion(asset);
     return version ? [buildAssetTrack(asset, version, studio, t)] : [];
   }), [assets, studio.catalog.catalog, t]);
+
+  const waveformInputs = useMemo(
+    () => allAssetTracks.map(track => ({ id: track.id, src: track.src, stored: track.version?.waveform })),
+    [allAssetTracks],
+  );
+  const decodedWaveforms = useAudioWaveforms(waveformInputs, 128);
 
   const savedAssetIds = useMemo(
     () => new Set(allAssetTracks.map(item => item.asset?.id).filter((id): id is string => Boolean(id))),
@@ -586,9 +553,9 @@ export function SoundStudioWorkspace({
   );
 
   const filteredAssetTracks = useMemo(() => {
-    if (typeFilter === 'all') return allAssetTracks;
-    return allAssetTracks.filter(track => classifyAudioTrackTab(track.version?.model, models) === typeFilter);
-  }, [allAssetTracks, typeFilter, models]);
+    if (typeFilter === 'all' || hasServerAudioKind) return allAssetTracks;
+    return allAssetTracks.filter(track => classifyAudioTrackTab(track.version?.model, models, track.version?.source, track.version?.audioKind) === typeFilter);
+  }, [allAssetTracks, typeFilter, hasServerAudioKind, models]);
 
   // Unified stream jobs: in-progress, save-pending and resumable jobs always appear;
   // completed jobs seamlessly yield to their saved library track row without duplicates;
@@ -661,23 +628,24 @@ export function SoundStudioWorkspace({
     [filteredAssetTracks, featuredDemoTrack],
   );
 
+  const pauseMainPlayerRef = useRef<() => void>(() => {});
+  const stopVoiceAuditionRef = useRef<() => void>(() => {});
+
   const player = useSoundPlayer({
-    active,
+    active: active && !isSoonTab,
     playlist,
     onVoiceError: () => onError(t('Preview failed to load')),
+    onPlayStart: () => stopVoiceAuditionRef.current(),
   });
+  pauseMainPlayerRef.current = player.pause;
 
-  const voicePreview: VoicePreviewController = useMemo(() => ({
-    activeTrackId: player.track?.kind === 'voice' ? player.track.id : undefined,
-    playing: player.track?.kind === 'voice' && player.playing,
-    loading: player.track?.kind === 'voice' && player.loading,
-    resolve: (model, voice) => resolveVoicePreview(model, voice.value, voice.previewUrl),
-    toggle: (model, voice) => {
-      const source = resolveVoicePreview(model, voice.value, voice.previewUrl);
-      if (!source) return;
-      player.playTrack(buildVoicePreviewTrack(model, voice, source, t));
-    },
-  }), [player.track?.id, player.track?.kind, player.playing, player.loading, player.playTrack, t]);
+  const voiceAudition = useVoiceAudition({
+    active: active && !isSoonTab,
+    onPlayStart: () => pauseMainPlayerRef.current(),
+    onError: () => onError(t('Preview failed to load')),
+  });
+  stopVoiceAuditionRef.current = voiceAudition.stop;
+  const voicePreview = voiceAudition.controller;
 
   const revealTrackRow = useCallback((trackId: string): boolean => {
     const stage = stageRef.current;
@@ -729,33 +697,90 @@ export function SoundStudioWorkspace({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [active, isSoonTab, player, playlist]);
 
-  const hasFilters = Boolean(browser.query.trim() || browser.source !== 'all' || typeFilter !== 'all');
+  const hasQueryOrSource = Boolean(browser.query.trim() || browser.source !== 'all');
+  const hasFilters = Boolean(hasQueryOrSource || typeFilter !== 'all');
   const libraryEmpty = browser.data !== undefined && browser.data.total === 0 && !hasFilters;
-  const showStarters = libraryEmpty && streamJobs.length === 0;
+  const starterTab: SoundLiveTabId | null = typeFilter === 'music' || typeFilter === 'sfx' || typeFilter === 'speech'
+    ? typeFilter
+    : libraryEmpty
+      ? liveTab
+      : null;
+  const showStarters = Boolean(
+    starterTab
+    && browser.data !== undefined
+    && streamEntries.length === 0
+    && !hasQueryOrSource,
+  );
+  const showSourceFilter = browser.source !== 'all' || (seenSources.generated && seenSources.upload);
 
-  const applyPromptToComposer = (text: string, notice?: string) => {
+  const applyStarterPrompt = (targetTab: SoundLiveTabId, text: string, notice: string) => {
+    if (targetTab !== activeTab && studio.selectSoundTab) {
+      studio.selectSoundTab(targetTab, { modality: 'audio', prompt: text, references: [] });
+      setMobileView('create');
+      requestAnimationFrame(() => promptRef.current?.focus());
+      onNotify(notice);
+      return;
+    }
+    if (targetTab !== liveTab && studio.reuseInScene) {
+      studio.reuseInScene(targetTab === 'speech' ? 'speech' : 'music', { modality: 'audio', prompt: text, references: [] });
+      onNotify(notice);
+      return;
+    }
     setDraft(current => ({ ...current, prompt: text }));
     setMobileView('create');
     requestAnimationFrame(() => promptRef.current?.focus());
-    if (notice) onNotify(notice);
+    onNotify(notice);
+  };
+
+  const resolveSfxStarterModel = (): Model | undefined => {
+    if (liveTab === 'sfx' && activeModel) return activeModel;
+    const gateway = studio.catalog.catalog;
+    const sfxModels = gateway?.models.filter(
+      model => model.modality === 'audio' && model.mode !== 'text-to-speech' && isSfxModel(model),
+    ) ?? [];
+    const availableSfx = sfxModels.filter(model =>
+      gateway?.status.providers.some(provider => provider.id === model.provider && provider.available),
+    );
+    return availableSfx[0] ?? sfxModels[0];
   };
 
   const applySfxStarter = (starter: SoundSfxStarter) => {
     const localizedPrompt = t(starter.prompt);
+    const targetModel = resolveSfxStarterModel();
     const nextValues: Record<string, unknown> = {
       duration_seconds: starter.durationSeconds,
       ...(starter.loop ? { loop: true } : {}),
     };
-    if (activeModel) {
+    if (targetModel) {
       setParameterDrafts(current => {
-        const prev = current[activeModel.id] ?? emptyParameters;
-        return { ...current, [activeModel.id]: { ...prev, values: { ...prev.values, ...nextValues } } };
+        const prev = current[targetModel.id] ?? emptyParameters;
+        return { ...current, [targetModel.id]: { ...prev, values: { ...prev.values, ...nextValues } } };
       });
+    }
+    const nextDraft: AssetDraft = {
+      modality: 'audio',
+      prompt: localizedPrompt,
+      ...(targetModel ? { model: targetModel.id } : {}),
+      parameters: nextValues,
+      references: [],
+    };
+    if (activeTab !== 'sfx' && studio.selectSoundTab) {
+      studio.selectSoundTab('sfx', nextDraft, targetModel?.id ?? null);
+      setMobileView('create');
+      requestAnimationFrame(() => promptRef.current?.focus());
+      onNotify(t('Prompt loaded into editor'));
+      return;
+    }
+    if (liveTab !== 'sfx' && studio.reuseInScene) {
+      studio.reuseInScene('music', nextDraft, targetModel?.id ?? null);
+      onNotify(t('Prompt loaded into editor'));
+      return;
     }
     setDraft(current => ({
       ...current,
       prompt: localizedPrompt,
-      ...(activeModel ? { model: activeModel.id, parameters: { ...(current.parameters ?? {}), ...nextValues } } : {}),
+      ...(targetModel ? { model: targetModel.id } : {}),
+      parameters: { ...(current.parameters ?? {}), ...nextValues },
     }));
     setMobileView('create');
     requestAnimationFrame(() => promptRef.current?.focus());
@@ -775,16 +800,21 @@ export function SoundStudioWorkspace({
     }
   };
 
-  const hydrateComposer = (prompt: string, modelId: string | undefined, parameters: Record<string, unknown> | undefined) => {
+  const hydrateComposer = (
+    prompt: string,
+    modelId: string | undefined,
+    parameters: Record<string, unknown> | undefined,
+    savedAudioKind?: AudioKind,
+  ) => {
     const matchedModel = modelId ? models?.find(m => m.id === modelId) : undefined;
-    const classified = classifyAudioTrackTab(modelId, models);
+    const classified = classifyAudioTrackTab(modelId, models, undefined, savedAudioKind);
     const targetTab: SoundLiveTabId = classified === 'upload' ? liveTab : classified;
 
     if (modelId && parameters && Object.keys(parameters).length > 0) {
       const key = matchedModel?.id ?? modelId;
       setParameterDrafts(current => ({
         ...current,
-        [key]: { values: { ...parameters }, advanced: '{}' },
+        [key]: parameterDraftFromParams(parameters, matchedModel),
       }));
     }
 
@@ -824,11 +854,16 @@ export function SoundStudioWorkspace({
 
   const reuseTrack = (track: SoundPlayableTrack) => {
     if (!track.prompt) return;
-    hydrateComposer(track.prompt, track.version?.model, track.version?.parameters);
+    hydrateComposer(track.prompt, track.version?.model, track.version?.parameters, track.version?.audioKind);
   };
 
   const recreateJob = (job: GenerationJob) => {
-    hydrateComposer(job.prompt, job.model.id, job.parameters);
+    hydrateComposer(
+      job.prompt,
+      job.model.id,
+      job.parameters,
+      classifyAudioKind(job.model.id, job.model.mode, 'generated', `${job.model.modelId} ${job.model.label}`),
+    );
   };
 
   const handleCreated = (job: GenerationJob) => {
@@ -869,12 +904,13 @@ export function SoundStudioWorkspace({
     }
   };
 
-  const typeOptions: readonly { id: AudioTypeFilter; label: string }[] = [
+  const typeOptions: readonly { id: AudioTypeFilter; label: string }[] = useMemo(() => [
     { id: 'all', label: 'All' },
     { id: 'music', label: 'Music' },
     { id: 'sfx', label: 'Sound effects' },
     { id: 'speech', label: 'Speech' },
-  ];
+    ...(seenSources.upload || typeFilter === 'upload' ? [{ id: 'upload' as const, label: 'Local upload' }] : []),
+  ], [seenSources.upload, typeFilter]);
 
   const newAssetIds = useMemo(() => new Set(
     jobs
@@ -892,7 +928,7 @@ export function SoundStudioWorkspace({
     }
   };
 
-  const renderTrackRow = (track: SoundPlayableTrack) => {
+  const renderTrackRow = (track: SoundPlayableTrack, hasDayGroup: boolean) => {
     const asset = track.asset!;
     const version = track.version!;
     const isCurrent = player.track?.id === track.id;
@@ -902,24 +938,29 @@ export function SoundStudioWorkspace({
     const progress = isCurrent && trackDuration > 0 ? Math.min(1, player.currentTime / trackDuration) : 0;
     const isFresh = newAssetIds.has(asset.id);
     const isSaving = updatingAssets.has(asset.id);
-    const modelLabel = modelLabelForVersion(studio, version.model);
-    const voiceName = resolveSavedVoiceName(version.parameters?.voice, version.model, models);
+    const trackKind = classifyAudioTrackTab(version.model, models, version.source, version.audioKind);
+    const modelLabel = resolveAudioModelLabel(version.model, models);
+    const voiceName = trackKind === 'speech'
+      ? resolveSavedVoiceName(version.parameters?.voice, version.model, models, true)
+      : undefined;
     const isInstrumental = version.parameters?.instrumental === true;
     const isLoop = version.parameters?.loop === true;
     const normalizedPrompt = version.prompt?.replace(/\s+/g, ' ').trim();
     const titleTooltip = normalizedPrompt && normalizedPrompt.length > asset.name.length && normalizedPrompt.startsWith(asset.name)
       ? version.prompt!
       : asset.name;
-    const sourceLabel = [
+    const detailParts = [
       modelLabel ?? (version.source === 'upload' ? t('Local upload') : ''),
-      voiceName,
       isInstrumental ? t('Instrumental') : '',
       isLoop ? t('Loop') : '',
     ].filter(Boolean).join(' · ');
-    const metadataText = [
-      version.bytes > 0 ? formatBytes(version.bytes) : version.mimeType,
-      formatDate(version.createdAt, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    ].filter(Boolean).join(' · ');
+    const timeLabel = formatDate(
+      version.createdAt,
+      hasDayGroup
+        ? { hour: '2-digit', minute: '2-digit' }
+        : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+    );
+    const bars = decodedWaveforms.get(track.id) ?? track.waveform;
 
     return (
       <div
@@ -927,6 +968,7 @@ export function SoundStudioWorkspace({
         role="listitem"
         className="om-sound-track-row"
         data-track-id={track.id}
+        data-audio-kind={trackKind}
         data-active={isCurrent || undefined}
         data-playing={isPlaying || undefined}
         data-fresh={isFresh || undefined}
@@ -940,50 +982,56 @@ export function SoundStudioWorkspace({
             data-playing={isPlaying || undefined}
             aria-label={t(isPlaying ? 'Pause {name}' : 'Play {name}', { name: asset.name })}
             onClick={() => player.playTrack(track)}
-            icon={<RemixIcon name={isPlaying ? 'pause-fill' : 'play-fill'} size={16} />}
+            icon={<RemixIcon name={isPlaying ? 'pause-fill' : 'play-fill'} size={16} className={!isPlaying ? 'om-sound-play-glyph' : undefined} />}
           />
         </Tooltip>
 
-        <div className="om-sound-row-info">
-          <div className="om-sound-row-title-line">
+        <Button
+          type="button"
+          variant="plain"
+          className="om-sound-row-info om-sound-row-info-btn"
+          aria-label={t('Asset details')}
+          onClick={() => onOpenAsset(asset)}
+        >
+          <span className="om-sound-row-title-line">
+            <RemixIcon name={AUDIO_KIND_ICON[trackKind]} size={13} className="om-sound-row-kind-icon" />
             <Tooltip label={titleTooltip} wrap>
               <strong className="om-sound-row-title">{asset.name}</strong>
             </Tooltip>
             {asset.versions.length > 1 && <span className="om-badge">V{versionNum}</span>}
             {isFresh && <span className="om-badge" data-active="true">{t('New')}</span>}
-          </div>
-          <div className="om-sound-row-meta-line">
-            {sourceLabel && (
-              <Tooltip label={sourceLabel} wrap>
-                <span className="om-sound-row-source">{sourceLabel}</span>
-              </Tooltip>
+          </span>
+          <span className="om-sound-row-meta-line">
+            {voiceName && (
+              <span className="om-sound-voice-chip">{voiceName}</span>
             )}
-            {sourceLabel && metadataText && (
+            {detailParts && (
+              <span className="om-sound-row-source">{detailParts}</span>
+            )}
+            {detailParts && timeLabel && (
               <span className="om-sound-row-sep" aria-hidden="true">·</span>
             )}
-            <p className="om-sound-row-desc">
-              <span>{metadataText}</span>
-            </p>
-          </div>
-        </div>
+            {timeLabel && <span className="om-sound-row-desc">{timeLabel}</span>}
+          </span>
+        </Button>
 
         <div className="om-sound-row-wave">
           <InteractiveWaveform
-            bars={track.waveform}
+            bars={bars}
             progress={progress}
             active={isCurrent}
+            playing={isPlaying}
+            duration={trackDuration}
+            audioRef={player.audioRef}
             label={t('Seek {name}', { name: asset.name })}
             onSeek={ratio => player.playTrack(track, ratio)}
+            onScrub={ratio => {
+              if (trackDuration > 0) player.seekTo(ratio * trackDuration);
+            }}
           />
         </div>
 
-        <span className="om-sound-row-duration">
-          {isCurrent && trackDuration > 0
-            ? `${formatTime(player.currentTime)} / ${formatTime(trackDuration)}`
-            : trackDuration > 0
-              ? formatTime(trackDuration)
-              : '--:--'}
-        </span>
+        <span className="om-sound-row-duration">{formatTrackDuration(trackDuration)}</span>
 
         <div className="om-sound-row-actions">
           {version.prompt && (
@@ -998,16 +1046,6 @@ export function SoundStudioWorkspace({
               />
             </Tooltip>
           )}
-          <Tooltip label={t('Copy asset reference')}>
-            <IconButton
-              type="button"
-              variant="plain"
-              className="om-nav-item om-sound-row-action"
-              aria-label={t('Copy asset reference')}
-              onClick={() => copyAssetRef(track)}
-              icon={<RemixIcon name="file-copy-line" size={15} />}
-            />
-          </Tooltip>
           <Tooltip label={t('Download')}>
             <a
               className="om-nav-item om-sound-row-action"
@@ -1019,30 +1057,49 @@ export function SoundStudioWorkspace({
               <RemixIcon name="download-2-line" size={15} />
             </a>
           </Tooltip>
-          <Tooltip label={t('Asset details')}>
-            <IconButton
-              type="button"
-              variant="plain"
-              className="om-nav-item om-sound-row-action"
-              aria-label={t('Asset details')}
+          <Menu
+            side="bottom"
+            align="end"
+            aria-label={t('More actions')}
+            className="om-sound-row-menu"
+            trigger={
+              <IconButton
+                type="button"
+                variant="plain"
+                className="om-nav-item om-sound-row-action"
+                aria-label={t('More actions')}
+                icon={<RemixIcon name="more-fill" size={15} />}
+              />
+            }
+          >
+            <MenuItem
+              className="om-sound-row-menu-item"
+              icon={<RemixIcon name="arrow-right-up-line" size={14} />}
               onClick={() => onOpenAsset(asset)}
-              icon={<RemixIcon name="arrow-right-up-line" size={15} />}
-            />
-          </Tooltip>
-          <Tooltip label={t('Move to trash')}>
-            <IconButton
-              type="button"
-              variant="plain"
-              className="om-nav-item om-sound-row-action"
-              aria-label={t('Move to trash')}
+            >
+              {t('Asset details')}
+            </MenuItem>
+            <MenuItem
+              className="om-sound-row-menu-item"
+              icon={<RemixIcon name="file-copy-line" size={14} />}
+              onClick={() => copyAssetRef(track)}
+            >
+              {t('Copy asset reference')}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem
+              className="om-sound-row-menu-item"
+              tone="danger"
               disabled={isSaving}
+              icon={<RemixIcon name="delete-bin-line" size={14} />}
               onClick={() => {
                 if (player.track?.id === track.id) player.close();
                 void onTrashAsset(asset.id);
               }}
-              icon={<RemixIcon name="delete-bin-line" size={15} />}
-            />
-          </Tooltip>
+            >
+              {t('Move to trash')}
+            </MenuItem>
+          </Menu>
         </div>
       </div>
     );
@@ -1115,7 +1172,6 @@ export function SoundStudioWorkspace({
           {isSoonTab ? (
             <SoundSoonPreview
               tab={tabDef}
-              trackCount={browser.data?.total ?? 0}
               onPivot={pivotToLiveTab}
             />
           ) : (
@@ -1137,18 +1193,20 @@ export function SoundStudioWorkspace({
                     ))}
                   </div>
 
-                  <div className="om-sound-select">
-                    <Select
-                      label={t('Source')}
-                      value={browser.source}
-                      onCommit={browser.setSource}
-                      options={[
-                        { value: 'all', label: t('All sources') },
-                        { value: 'generated', label: t('AI generated') },
-                        { value: 'upload', label: t('Local upload') },
-                      ]}
-                    />
-                  </div>
+                  {showSourceFilter && (
+                    <div className="om-sound-select">
+                      <Select
+                        label={t('Source')}
+                        value={browser.source}
+                        onCommit={browser.setSource}
+                        options={[
+                          { value: 'all', label: t('All sources') },
+                          { value: 'generated', label: t('AI generated') },
+                          { value: 'upload', label: t('Local upload') },
+                        ]}
+                      />
+                    </div>
+                  )}
 
                   <label className="om-field om-sound-search">
                     <RemixIcon name="search-line" size={15} />
@@ -1214,7 +1272,7 @@ export function SoundStudioWorkspace({
                             {group.label && <div className="om-sound-day-label">{group.label}</div>}
                             <div className="om-sound-track-list" role="list">
                               {group.entries.map(entry => {
-                                if (entry.kind === 'track') return renderTrackRow(entry.track);
+                                if (entry.kind === 'track') return renderTrackRow(entry.track, Boolean(group.label));
                                 const job = entry.job;
                                 const isWorkingOrMorphing =
                                   job.state === 'queued'
@@ -1271,7 +1329,7 @@ export function SoundStudioWorkspace({
                         </div>
                       )}
                     </>
-                  ) : hasFilters ? (
+                  ) : hasFilters && !showStarters ? (
                     <div className="om-empty om-sound-state-box">
                       <RemixIcon name="search-line" size={28} />
                       <h2 className="om-subtitle">{t('No matching assets')}</h2>
@@ -1287,9 +1345,9 @@ export function SoundStudioWorkspace({
                   ) : null}
                 </section>
 
-                {showStarters && (
+                {showStarters && starterTab && (
                   <section className="om-sound-section om-sound-starters" aria-label={t('Starters')}>
-                    {liveTab === 'music' && (
+                    {starterTab === 'music' && (
                       <div className="om-sound-track-list" role="list">
                         <div
                           role="listitem"
@@ -1308,7 +1366,7 @@ export function SoundStudioWorkspace({
                                 { name: t(featuredRecipe.title) },
                               )}
                               onClick={() => player.playTrack(featuredDemoTrack)}
-                              icon={<RemixIcon name={player.track?.id === featuredDemoTrack.id && player.playing ? 'pause-fill' : 'play-fill'} size={16} />}
+                              icon={<RemixIcon name={player.track?.id === featuredDemoTrack.id && player.playing ? 'pause-fill' : 'play-fill'} size={16} className={!(player.track?.id === featuredDemoTrack.id && player.playing) ? 'om-sound-play-glyph' : undefined} />}
                             />
                           </Tooltip>
                           <div className="om-sound-row-info">
@@ -1327,21 +1385,26 @@ export function SoundStudioWorkspace({
                                   : 0
                               }
                               active={player.track?.id === featuredDemoTrack.id}
+                              playing={player.track?.id === featuredDemoTrack.id && player.playing}
+                              duration={player.track?.id === featuredDemoTrack.id && player.duration > 0 ? player.duration : (featuredRecipe.durationSeconds ?? 37)}
+                              audioRef={player.audioRef}
                               label={t('Seek {name}', { name: t(featuredRecipe.title) })}
                               onSeek={ratio => player.playTrack(featuredDemoTrack, ratio)}
+                              onScrub={ratio => {
+                                const dur = player.duration > 0 ? player.duration : (featuredRecipe.durationSeconds ?? 37);
+                                player.seekTo(ratio * dur);
+                              }}
                             />
                           </div>
                           <span className="om-sound-row-duration">
-                            {player.track?.id === featuredDemoTrack.id && player.duration > 0
-                              ? `${formatTime(player.currentTime)} / ${formatTime(player.duration)}`
-                              : formatTime(featuredRecipe.durationSeconds ?? 37)}
+                            {formatTrackDuration(featuredRecipe.durationSeconds ?? 37)}
                           </span>
                           <div className="om-sound-row-actions">
                             <Button
                               type="button"
                               variant="plain"
                               className="om-nav-item om-sound-use-btn"
-                              onClick={() => applyPromptToComposer(t(featuredRecipe.prompt), t('Prompt loaded into editor'))}
+                              onClick={() => applyStarterPrompt('music', t(featuredRecipe.prompt), t('Prompt loaded into editor'))}
                             >
                               <RemixIcon name="add-line" size={14} />
                               {t('Use')}
@@ -1359,7 +1422,7 @@ export function SoundStudioWorkspace({
                               type="button"
                               variant="plain"
                               className="om-nav-item om-sound-use-btn"
-                              onClick={() => applyPromptToComposer(t(recipe.prompt), t('Prompt loaded into editor'))}
+                              onClick={() => applyStarterPrompt('music', t(recipe.prompt), t('Prompt loaded into editor'))}
                             >
                               <RemixIcon name="add-line" size={14} />
                               {t('Use')}
@@ -1369,7 +1432,7 @@ export function SoundStudioWorkspace({
                       </div>
                     )}
 
-                    {liveTab === 'sfx' && (
+                    {starterTab === 'sfx' && (
                       <div className="om-sound-track-list" role="list">
                         {SOUND_SFX_STARTERS.map(starter => (
                           <div key={starter.id} role="listitem" className="om-sound-starter-row">
@@ -1395,7 +1458,7 @@ export function SoundStudioWorkspace({
                       </div>
                     )}
 
-                    {liveTab === 'speech' && (
+                    {starterTab === 'speech' && (
                       <div className="om-sound-track-list" role="list">
                         {SOUND_SPEECH_SCRIPTS.map(item => {
                           const localized = t(item.script);
@@ -1413,7 +1476,7 @@ export function SoundStudioWorkspace({
                                 type="button"
                                 variant="plain"
                                 className="om-nav-item om-sound-use-btn"
-                                onClick={() => applyPromptToComposer(localized, t('Script loaded into editor'))}
+                                onClick={() => applyStarterPrompt('speech', localized, t('Script loaded into editor'))}
                               >
                                 <RemixIcon name="add-line" size={14} />
                                 {t('Use')}
@@ -1440,10 +1503,19 @@ export function SoundStudioWorkspace({
             </>
           )}
 
-          <SoundPlayerDock
-            player={player}
-            onLocateTrack={locateTrack}
-          />
+          {!isSoonTab && (
+            <>
+              {voiceAudition.audioProps && (
+                <span className="om-sound-voice-audio-host" hidden>
+                  <audio {...voiceAudition.audioProps} />
+                </span>
+              )}
+              <SoundPlayerDock
+                player={player}
+                onLocateTrack={locateTrack}
+              />
+            </>
+          )}
         </section>
       </div>
     </div>

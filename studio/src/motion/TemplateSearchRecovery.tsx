@@ -183,7 +183,7 @@ export function TemplateSearchRecovery(props: RequestCallbacks & (SearchRecovery
       <div className={styles.resourceLinks}>
         <Button variant="plain" type="button" className={`om-text-link ${styles.repositoryLink}`} data-quiet disabled={copying} onClick={() => choose(mode === 'reference' ? 'describe' : 'reference')}>
           {t(mode === 'reference' ? 'Describe your video' : 'Add your reference')}</Button>
-        <a className={`om-text-link ${styles.repositoryLink}`} data-quiet href="?page=mcp" target="_blank" rel="noopener noreferrer">{t('Connect an Agent')}<MotionIcon name="arrow-up-right" size={14} /></a>
+        <a className={`om-text-link ${styles.repositoryLink}`} data-quiet href="/mcp-setup" target="_blank" rel="noopener noreferrer">{t('Connect an Agent')}<MotionIcon name="arrow-up-right" size={14} /></a>
       </div>
     </div>
   </form>;

@@ -7,6 +7,7 @@ import { Menu, MenuRadioGroup, MenuRadioItem } from '../components/ui/Menu';
 import { Tooltip } from '../components/ui/Tooltip';
 import { useI18n } from '../i18n/I18n';
 import { RemixIcon } from '../icons/RemixIcons';
+import { formatDuration } from '../components/sidebar/assetHelpers';
 import { formatTime } from '../player/lib/time';
 
 export interface SoundPlayableTrack {
@@ -40,16 +41,20 @@ export function useSoundPlayer({
   active,
   playlist,
   onVoiceError,
+  onPlayStart,
 }: {
   active: boolean;
   playlist: readonly SoundPlayableTrack[];
   onVoiceError?: () => void;
+  onPlayStart?: () => void;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const autoplayRef = useRef(false);
   const pendingSeekRatioRef = useRef<number | null>(null);
   const onVoiceErrorRef = useRef(onVoiceError);
+  const onPlayStartRef = useRef(onPlayStart);
   onVoiceErrorRef.current = onVoiceError;
+  onPlayStartRef.current = onPlayStart;
   const [track, setTrack] = useState<SoundPlayableTrack | null>(null);
   const [resolvedSrc, setResolvedSrc] = useState('');
   const [loadNonce, setLoadNonce] = useState(0);
@@ -146,11 +151,24 @@ export function useSoundPlayer({
 
   useEffect(() => () => { audioRef.current?.pause(); }, []);
 
+  const pause = useCallback(() => {
+    autoplayRef.current = false;
+    audioRef.current?.pause();
+  }, []);
+
   const togglePlay = useCallback(() => {
     const el = audioRef.current;
     if (!el || !resolvedSrc || error) return;
-    if (el.paused) void el.play().catch(() => setPlaying(false));
-    else el.pause();
+    if (el.paused) {
+      onPlayStartRef.current?.();
+      if (el.ended) {
+        el.currentTime = 0;
+        setCurrentTime(0);
+      }
+      void el.play().catch(() => setPlaying(false));
+    } else {
+      el.pause();
+    }
   }, [resolvedSrc, error]);
 
   const seekTo = useCallback((seconds: number) => {
@@ -173,7 +191,10 @@ export function useSoundPlayer({
           if (Number.isFinite(el.duration) && el.duration > 0) el.currentTime = target;
           else pendingSeekRatioRef.current = seekRatio;
         }
-        if (el.paused && resolvedSrc) void el.play().catch(() => setPlaying(false));
+        if (el.paused && resolvedSrc) {
+          onPlayStartRef.current?.();
+          void el.play().catch(() => setPlaying(false));
+        }
         return;
       }
       if (error) {
@@ -185,6 +206,7 @@ export function useSoundPlayer({
       return;
     }
     audioRef.current?.pause();
+    onPlayStartRef.current?.();
     pendingSeekRatioRef.current = seekRatio ?? null;
     autoplayRef.current = true;
     setPlaying(false);
@@ -250,6 +272,7 @@ export function useSoundPlayer({
     setMuted,
     setRate,
     playTrack,
+    pause,
     togglePlay,
     seekTo,
     stepTrack,
@@ -261,6 +284,10 @@ export function useSoundPlayer({
       onPlay: () => setPlaying(true),
       onPause: () => setPlaying(false),
       onEnded: () => {
+        const el = audioRef.current;
+        if (el && Number.isFinite(el.duration) && el.duration > 0) {
+          setCurrentTime(el.duration);
+        }
         setPlaying(false);
         if (track?.kind === 'voice') setTrack(null);
       },
@@ -290,6 +317,24 @@ export function SoundPlayerDock({
   const { t } = useI18n();
   const [speedOpen, setSpeedOpen] = useState(false);
   const { track, resolvedSrc, loading, error, playing, currentTime, duration, volume, muted, rate } = player;
+  const [smoothTime, setSmoothTime] = useState(currentTime);
+
+  useEffect(() => {
+    setSmoothTime(currentTime);
+  }, [currentTime, track?.id]);
+
+  // Smooth 60fps scrubber & timecode progression isolated inside the dock without re-rendering the track list.
+  useEffect(() => {
+    if (!playing || !track || track.kind === 'voice') return;
+    let rafId = 0;
+    const tick = () => {
+      const el = player.audioRef.current;
+      if (el && Number.isFinite(el.currentTime)) setSmoothTime(el.currentTime);
+      rafId = window.requestAnimationFrame(tick);
+    };
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [playing, track?.id, track?.kind, player.audioRef]);
 
   if (!track) return null;
 
@@ -327,6 +372,7 @@ export function SoundPlayerDock({
           <strong>{track.title}</strong>
           {track.kind === 'demo' && <span className="om-badge">{t('Sample')}</span>}
         </span>
+        {track.subtitle && <small className="om-sound-dock-subtitle">{track.subtitle}</small>}
       </span>
     </>
   );
@@ -387,7 +433,7 @@ export function SoundPlayerDock({
                   disabled={loading || !resolvedSrc}
                   aria-label={t(playing ? 'Pause' : 'Play')}
                   onClick={player.togglePlay}
-                  icon={<RemixIcon name={loading ? 'loader-4-line' : playing ? 'pause-fill' : 'play-fill'} size={16} className={loading ? 'animate-spin motion-reduce:animate-none' : undefined} />}
+                  icon={<RemixIcon name={loading ? 'loader-4-line' : playing ? 'pause-fill' : 'play-fill'} size={16} className={loading ? 'animate-spin motion-reduce:animate-none' : !playing ? 'om-sound-play-glyph' : undefined} />}
                 />
               </Tooltip>
               <Tooltip label={t('Next track')}>
@@ -404,19 +450,19 @@ export function SoundPlayerDock({
             </div>
 
             <div className="om-sound-dock-scrub">
-              <span className="om-sound-timecode">{formatTime(currentTime)}</span>
+              <span className="om-sound-timecode om-sound-timecode-current" data-playing={playing || undefined}>{formatTime(smoothTime)}</span>
               <Slider
                 label={t('Seek preview')}
                 min={0}
                 max={effectiveDuration > 0 ? effectiveDuration : 1}
-                step={0.1}
-                value={effectiveDuration > 0 ? Math.min(currentTime, effectiveDuration) : 0}
+                step={0.05}
+                value={effectiveDuration > 0 ? Math.min(smoothTime, effectiveDuration) : 0}
                 disabled={loading || !resolvedSrc || effectiveDuration <= 0}
-                onPreview={player.seekTo}
-                onCommit={player.seekTo}
+                onPreview={v => { setSmoothTime(v); player.seekTo(v); }}
+                onCommit={v => { setSmoothTime(v); player.seekTo(v); }}
                 className="om-sound-dock-slider"
               />
-              <span className="om-sound-timecode">{effectiveDuration > 0 ? formatTime(effectiveDuration) : '--:--'}</span>
+              <span className="om-sound-timecode">{effectiveDuration > 0 ? (formatDuration(effectiveDuration) || formatTime(effectiveDuration)) : '--:--'}</span>
             </div>
           </>
         )}

@@ -376,57 +376,7 @@
   border-bottom: 1px solid var(--motion-border-subtle);
 }
 
-.om-design-code-pre,
-.om-design-code-editor {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  margin: 0;
-  padding: var(--motion-space-14) 0;
-  overflow: auto;
-  font-family: var(--motion-font-mono);
-  font-size: var(--motion-text-sm);
-  line-height: 1.65;
-  background: var(--motion-bg);
-  color: var(--motion-text);
-  border: 0;
-  resize: none;
-  tab-size: 2;
-}
-
-.om-design-code-editor {
-  padding: var(--motion-space-16);
-}
-
-.om-design-code-line {
-  display: flex;
-  padding: 0 var(--motion-space-16) 0 0;
-}
-
-.om-design-code-line:hover {
-  background: var(--motion-hover);
-}
-
-.om-design-code-ln {
-  width: 48px;
-  padding-right: var(--motion-space-12);
-  text-align: right;
-  user-select: none;
-  color: var(--motion-muted);
-  opacity: 0.6;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.om-design-code-text {
-  white-space: pre;
-}
-
-.om-design-tok-tag { color: var(--motion-accent); font-weight: var(--motion-weight-medium); }
-.om-design-tok-string { color: var(--motion-success); }
-.om-design-tok-comment { color: var(--motion-muted); font-style: italic; }
-.om-design-tok-keyword { color: var(--motion-warning); font-weight: var(--motion-weight-medium); }
-.om-design-tok-number { color: var(--motion-accent); }
+/* Code viewer & syntax token styles live in ./codeViewer.css (imported by CodeViewer.tsx). */
 
 /* --- Deck rail & speaker notes --- */
 .om-design-deck-rail {
@@ -1107,11 +1057,7 @@
   justify-content: flex-start;
   padding: var(--motion-space-16) var(--motion-space-24) var(--motion-space-24);
   gap: var(--motion-space-14);
-}
-
-.om-design-tpl-ambient {
-  border: 0;
-  transform: scale(1.16);
+  background: var(--motion-inset);
 }
 
 .om-design-tpl-stage-bar {

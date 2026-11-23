@@ -1,16 +1,18 @@
 // @vitest-environment happy-dom
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MotionApp, resolveWorkspaceProject } from './MotionApp';
 import { I18nProvider, translate } from '../i18n/I18n';
 import { trackMotion } from './tracking';
+import { preloadAllWorkspacePages } from '../router/lazyPages';
 
 vi.mock('../App', () => ({ StudioApp: ({ resolvedProjectId }: { resolvedProjectId: string }) => <div data-viewer-project={resolvedProjectId} /> }));
 vi.mock('./ArtifactViewer', () => ({ ArtifactViewer: ({ artifact }: { artifact: { projectId: string } }) => <div data-viewer-project={artifact.projectId} /> }));
 vi.mock('./tracking', () => ({ trackMotion: vi.fn() }));
 const id = '11111111-1111-1111-1111-111111111111';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+beforeAll(() => preloadAllWorkspacePages());
 afterEach(() => vi.unstubAllGlobals());
 it.each([false, true])('prepares only existing projects while browsing, and creates only the selected template (existing=%s)', async existing => {
   history.replaceState(null, '', '/?templates=1&embed=1');
@@ -66,7 +68,8 @@ it.each([false, true])('prepares only existing projects while browsing, and crea
     expect(posts()[2][0]).toBe(`/motion-api/projects/${preparedId}/open${existing ? `?projectId=${id}` : ''}`);
     expect(JSON.parse(String(posts()[2][1]!.body))).toEqual({ expectedRevision: existing ? 'original-revision' : 'new-revision', expectedProjectId: existing ? id : preparedId });
     expect(assign).not.toHaveBeenCalled();
-    expect(location.search).toContain(`project=${preparedId}`);
+    expect(location.pathname).toBe(`/editor/${preparedId}`);
+    expect(location.hash).toBe(`#project/${preparedId}`);
     expect(location.search).not.toContain('templates=1');
     expect(container.querySelector('dialog[aria-label="Template library"]')).toBeNull();
   } finally {

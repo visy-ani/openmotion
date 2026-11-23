@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense } from "react";
+import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { IconContext } from "@phosphor-icons/react";
 import { MotionApp } from "./motion/MotionApp";
@@ -12,21 +12,36 @@ import {
 } from "./utils/rejectionTelemetry";
 import { prefetchPreviewForHash } from "./utils/previewPrefetch";
 import { bindThumbnailPageLifecycle } from "./player/lib/thumbnailPageLifecycle";
+// Shared workspace host and discovery surface styles (imported before studio.css
+// and application.css to preserve exact cascade order across all lazy routes).
+import "./motion/skills.css";
+import "./motion/sceneDiscovery.css";
+import "./motion/assets.css";
 import "./styles/studio.css";
 import "./motion/theme.css";
 import "./motion/workspace.css";
 import "../../packages/design-system/studio.css";
 import "./motion/application.css";
 import { MotionStudioHost } from "./motion/MotionStudioHost";
+import { StudioRouterProvider } from "./router/createAppRouter";
 import { initializeDiagnostics, recordBrowserDiagnostic } from './motion/diagnostics';
 import { bindEmbeddedStudioTheme } from './utils/studioTheme';
+import { bindDesktopHost, notifyDesktopRendererReady } from './utils/platformHost';
+import { bindVitePreloadErrorReload, lazyWithChunkReload } from './utils/chunkReload';
+import { ensureLocaleLoaded, isLocaleLoaded, readLocale } from './i18n/I18n';
 
 const ComponentInspector = new URLSearchParams(location.search).get('debug') === 'ui'
-  ? lazy(() => import('./components/ComponentInspector'))
+  ? lazyWithChunkReload(() => import('./components/ComponentInspector'))
   : null;
+
+const unbindPreloadErrorReload = bindVitePreloadErrorReload();
+import.meta.hot?.dispose(unbindPreloadErrorReload);
 
 const unbindHostTheme = bindEmbeddedStudioTheme();
 import.meta.hot?.dispose(unbindHostTheme);
+
+const unbindDesktopHost = bindDesktopHost({ deferReady: true });
+import.meta.hot?.dispose(unbindDesktopHost);
 
 const stopDiagnostics = initializeDiagnostics();
 import.meta.hot?.dispose(stopDiagnostics);
@@ -128,17 +143,40 @@ window.addEventListener("unhandledrejection", (event) => {
   recordBrowserDiagnostic('unhandled_rejection', props.error_message, props.stack_trace ?? '');
 });
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    {/* One icon size and weight for the whole app, taken from the theme file.
-        Icons that pass their own size or weight still win. */}
-    <IconContext.Provider value={readIconTokens()}>
-      <ShowThemeToggle.Provider value>
-        <MotionStudioHost>
-          <MotionApp />
-          {ComponentInspector && <Suspense fallback={null}><ComponentInspector /></Suspense>}
-        </MotionStudioHost>
-      </ShowThemeToggle.Provider>
-    </IconContext.Provider>
-  </StrictMode>,
-);
+function mountStudio() {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      {/* One icon size and weight for the whole app, taken from the theme file.
+          Icons that pass their own size or weight still win. */}
+      <IconContext.Provider value={readIconTokens()}>
+        <ShowThemeToggle.Provider value>
+          <MotionStudioHost>
+            <StudioRouterProvider>
+              <MotionApp />
+            </StudioRouterProvider>
+            {ComponentInspector && <Suspense fallback={null}><ComponentInspector /></Suspense>}
+          </MotionStudioHost>
+        </ShowThemeToggle.Provider>
+      </IconContext.Provider>
+    </StrictMode>,
+  );
+
+  // Reveal the native desktop window only after the initial React commit has painted
+  // (with a wall-clock fallback if requestAnimationFrame is throttled while hidden).
+  const revealFallback = window.setTimeout(notifyDesktopRendererReady, 1200);
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      window.clearTimeout(revealFallback);
+      notifyDesktopRendererReady();
+    });
+  });
+}
+
+const initialLocale = readLocale();
+if (isLocaleLoaded(initialLocale)) {
+  mountStudio();
+} else {
+  // Keep index.html's native loading splash visible while the active locale's
+  // lazy dictionary downloads so first paint is localized without an English flash.
+  void ensureLocaleLoaded(initialLocale).catch(() => {}).finally(mountStudio);
+}

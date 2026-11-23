@@ -6,6 +6,7 @@ import { browserDiagnostics, nextDiagnosticRequest, recordBrowserDiagnostic } fr
 import { useToast } from '../hooks/useToast';
 import { StudioToastViewport } from '../components/StudioToastViewport';
 import { RemixIcon } from '../icons/RemixIcons';
+import { exportDesktopDiagnosticBundle, isDesktopApp } from '../utils/platformHost';
 
 export function DiagnosticExport() {
   const { t } = useI18n();
@@ -14,6 +15,20 @@ export function DiagnosticExport() {
   const toast = useToast();
   async function download() {
     if (pending.current) return;
+    if (isDesktopApp()) {
+      pending.current = true; setBusy(true);
+      try {
+        const result = await exportDesktopDiagnosticBundle();
+        if (result.ok) {
+          toast.showToast(t('Diagnostic logs exported'), 'info', 'feedback');
+        } else if (!result.canceled) {
+          toast.showToast(result.error || t('Could not export diagnostics. Use the command line if Studio cannot connect.'), 'error', 'feedback');
+        }
+      } finally {
+        pending.current = false; setBusy(false);
+      }
+      return;
+    }
     pending.current = true; setBusy(true);
     const request = nextDiagnosticRequest(), start = performance.now();
     recordBrowserDiagnostic('activity_diagnostic_export', `request=${request} outcome=started`);

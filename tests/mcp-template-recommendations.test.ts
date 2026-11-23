@@ -24,7 +24,7 @@ test('a negotiated native presentation is discoverable, readable and project-fre
   const before = await store.get();
   await call('initialize', { protocolVersion: '2025-06-18', capabilities });
   const listed = await call('tools/list');
-  assert.equal(listed.result.tools.length, 24);
+  assert.equal(listed.result.tools.length, 36);
   const definition = listed.result.tools.find((tool: any) => tool.name === name);
   assert.equal(definition.annotations.readOnlyHint, true);
   assert.match(definition.description, /onboarding=true/);
@@ -61,21 +61,21 @@ test('presentation capability is connection-local and cleared by reinitializatio
     (rpc as any)(message(method, params), store, registry, undefined, state);
   await call(a, 'initialize', { capabilities });
   const toolsA = await call(a, 'tools/list');
-  assert.equal(toolsA.result.tools.length, 24);
+  assert.equal(toolsA.result.tools.length, 36);
   const uri = toolsA.result.tools.find((tool: any) => tool.name === name)._meta.ui.resourceUri;
-  assert.equal((await call(b, 'tools/list')).result.tools.length, 22);
+  assert.equal((await call(b, 'tools/list')).result.tools.length, 34);
   const denied = await call(b, 'tools/call', { name, arguments: { templateIds: ids } });
   assert.equal(denied.result.structuredContent.error.code, 'MCP_TOOL_NOT_EXPOSED');
   assert.equal(denied.result.structuredContent.error.applied, false);
   assert.equal((await call(b, 'resources/read', { uri })).error.code, -32602);
-  assert.equal((await call(a, 'tools/list', {}, mcpRegistry('legacy'))).result.tools.length, 28);
+  assert.equal((await call(a, 'tools/list', {}, mcpRegistry('legacy'))).result.tools.length, 40);
   const baseResources = await call(b, 'resources/list');
   assert.ok(baseResources.result.resources.some((item: any) => item.uri.startsWith('openmotion://workflow/')));
   for (const invalid of [{}, { extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html+skybridge'] } } }, { extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: 'text/html;profile=mcp-app' } } }]) {
     await call(a, 'initialize', { capabilities });
-    assert.equal((await call(a, 'tools/list')).result.tools.length, 24);
+    assert.equal((await call(a, 'tools/list')).result.tools.length, 36);
     await call(a, 'initialize', { capabilities: invalid });
-    assert.equal((await call(a, 'tools/list')).result.tools.length, 22);
+    assert.equal((await call(a, 'tools/list')).result.tools.length, 34);
     assert.equal((await call(a, 'resources/read', { uri })).error.code, -32602);
   }
 }));
@@ -154,7 +154,7 @@ test('actual stdio preserves negotiated UI state and disabling template cards re
     });
     assert.equal(child.status, 0, child.stderr);
     const responses = child.stdout.trim().split('\n').map(line => JSON.parse(line));
-    assert.equal(responses[1].result.tools.length, disabled ? 23 : 24);
+    assert.equal(responses[1].result.tools.length, disabled ? 35 : 36);
     if (disabled) assert.equal(responses[2].result.structuredContent.error.code, 'MCP_TOOL_NOT_EXPOSED');
     else assert.deepEqual(responses[2].result.structuredContent.cards.map((card: any) => card.templateId), ids);
   }

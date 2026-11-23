@@ -53,7 +53,7 @@ try {
       }, theme);
       // The normal entry now uses the same masonry cards as the library. Keep
       // the legacy popup regression below as explicit rollback-path coverage.
-      await page.goto(`${origin}/?page=settings&templates=1&template=fixture-0`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${origin}/settings/general?templates=1&template=fixture-0`, { waitUntil: 'domcontentloaded' });
       const shelf = `${detail} section[aria-label="Similar templates"]`;
       await page.waitForSelector(`${shelf} .om-gallery-masonry .om-gallery-card`);
       await page.$eval(trigger, element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
@@ -84,7 +84,7 @@ try {
       await page.waitForSelector(`${detail}[open]`, { hidden: true });
       assert(await page.$('dialog[aria-label="Template library"][open]'), 'Escape returns to the library');
 
-      await page.goto(`${origin}/?page=settings&templates=1&template=fixture-0&templateHandoffPreview=0`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${origin}/settings/general?templates=1&template=fixture-0&templateHandoffPreview=0`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector(trigger);
       await page.$eval(trigger, element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
       await page.evaluate(() => document.activeElement?.blur());
@@ -118,9 +118,15 @@ try {
     }
   }
   await page.setViewport({ width: 1440, height: 900 });
+  // Retain legacy query bookmark coverage to verify in-place redirect to `/settings/general`
+  // while preserving orthogonal overlay/template query parameters.
   await page.goto(`${origin}/?page=settings&templates=1&template=fixture-0`, { waitUntil: 'domcontentloaded' });
   const guideButton = `${detail} button[aria-label="View motion.md guide"]`;
   await page.waitForSelector(guideButton);
+  const redirected = new URL(page.url());
+  assert.equal(redirected.pathname, '/settings/general', 'Legacy settings query bookmark redirects to canonical semantic path');
+  assert.equal(redirected.searchParams.get('templates'), '1');
+  assert.equal(redirected.searchParams.get('template'), 'fixture-0');
   await page.click(guideButton);
   const guide = `${detail} iframe[title="Interactive walkthrough"][srcdoc]`;
   const guideFrame = await (await page.waitForSelector(guide)).contentFrame();
@@ -136,7 +142,7 @@ try {
 
   for (const [width, height] of [[640, 360], [568, 320], [390, 844]]) {
     await page.setViewport({ width, height });
-    await page.goto(`${origin}/?page=settings&templates=1&brandStoriesPreview=1`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${origin}/settings/general?templates=1&brandStoriesPreview=1`, { waitUntil: 'domcontentloaded' });
     const brands = 'button[aria-label="TOP 100 brands"]';
     await page.waitForSelector(brands);
     await page.click(brands);

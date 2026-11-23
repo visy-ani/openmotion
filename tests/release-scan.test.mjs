@@ -19,6 +19,14 @@ test('privacy rules reject internal URLs, employee paths and private files witho
   for (const name of ['../escape', '/absolute', 'C:/drive', 'safe/../../outside', 'bad\\file', 'bad\tname']) assert.throws(() => archivePaths(name));
 });
 
+test('archive validation accepts the CRLF listing a Windows tar emits and still rejects unsafe entries', () => {
+  const listing = 'package/\r\npackage/package.json\r\npackage/payload/openmotion-application.tar.gz';
+  assert.deepEqual(archivePaths(listing), ['package/', 'package/package.json', 'package/payload/openmotion-application.tar.gz']);
+  for (const name of ['../escape', '/absolute', 'C:/drive', 'bad\\file', 'bad\tname']) assert.throws(() => archivePaths(name + '\r\n'));
+  // A CR inside an entry name is a control character, not a line terminator to normalise away.
+  for (const name of ['bad\rname', 'a\rb', 'x\rz']) assert.throws(() => archivePaths(name), { message: /Unsafe archive entry/ });
+});
+
 test('only the approved public community invitation is permitted in product READMEs', async () => {
   const text = await readFile(new URL('../README.md', import.meta.url), 'utf8');
   const invite = text.match(/href="([^"\n]+add_by_link[^"\n]+)"/)[1];

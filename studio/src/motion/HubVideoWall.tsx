@@ -16,6 +16,7 @@ import type { HubVideo } from './gemini4Videos';
 import { reportHubClick } from './exploreTracking';
 import { designSystemAsset } from '../../../packages/design-system/index.js';
 import { platformIcons } from '../../../packages/design-system/platform-icons.js';
+import { releaseMediaElement } from '../utils/releaseMediaElement';
 
 /** Per-video motion.md written from each reference film, keyed by video id. */
 const motionDocuments: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob('./model-hubs/gemini-4/motion/*.md', { query: '?url', import: 'default', eager: true }) as Record<string, string>)
@@ -49,12 +50,22 @@ function rowMajorColumns(videos: HubVideo[], count: number) {
   return columns;
 }
 
+function HubCardVideo({ src }: { src: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    return () => releaseMediaElement(element);
+  }, [src]);
+  return <video ref={ref} className="om-gallery-animation" src={src} muted loop playsInline autoPlay aria-hidden="true" />;
+}
+
 /** Community videos for a model hub. Each card plays its original post's media and links back to the author. */
 export function HubVideoWall({ hubId, signedIn, videos, title, query = '' }: { hubId: string; signedIn?: boolean; videos: HubVideo[]; title: string; query?: string }) {
   const { t, locale } = useI18n();
   const [filter, setFilter] = useState<Filter>('all');
-  // Cards autoplay while on screen, like the template gallery; reduced motion keeps posters.
+  // Cards autoplay while on screen, capped like the template gallery; reduced motion or an open detail modal pauses wall playback.
   const [inView, setInView] = useState<ReadonlySet<string>>(new Set());
+  const [priorityId, setPriorityId] = useState<string | null>(null);
   const [still, setStill] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
   const grid = useRef<HTMLDivElement>(null);
   // Rebind when the tab returns: the observer does not re-report cards that stayed in place.
@@ -73,7 +84,19 @@ export function HubVideoWall({ hubId, signedIn, videos, title, query = '' }: { h
     .filter(video => { const q = query.trim().toLocaleLowerCase(); return !q || [video.title, t(video.title), video.author, video.authorName, t(video.category), video.notes, video.notesEn ?? "", video.variant].some(text => text.toLocaleLowerCase().includes(q)); })
     .sort((a, b) => b.views - a.views), [videos, filter, query, t]);
   const visible = shown;
-  const columns = useGalleryColumns();  const compact = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
+  const columns = useGalleryColumns();
+  const compact = useMemo(() => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }), [locale]);
+  const maxPlayers = columns <= 2 ? 4 : 6;
+  const activeVideoIds = useMemo(() => {
+    if (still || !pageVisible || open !== null) return new Set<string>();
+    const next = new Set<string>();
+    if (priorityId && inView.has(priorityId)) next.add(priorityId);
+    for (const video of visible) {
+      if (next.size >= maxPlayers) break;
+      if (inView.has(video.id)) next.add(video.id);
+    }
+    return next;
+  }, [still, pageVisible, open, priorityId, inView, visible, maxPlayers]);
   useEffect(() => {
     const preference = matchMedia('(prefers-reduced-motion: reduce)');
     const change = () => setStill(preference.matches);
@@ -107,7 +130,7 @@ export function HubVideoWall({ hubId, signedIn, videos, title, query = '' }: { h
         onClick={() => { reportHubClick(hubId, 'hub_videos', 'filter_option', { filter: id, signedIn }); setFilter(id); }}>{label}</Button>)}</nav></div>
     </div>
     {!visible.length && <p className="om-muted om-hub-video-empty">{t('No videos match. Try another title, creator or scene.')}</p>}
-    <div ref={grid} className="om-hub-video-grid">{rowMajorColumns(visible, columns).map((column, c) => <div key={c} className="om-hub-video-column">{column.map(video => <article key={video.id} className="om-gallery-card om-hub-video" data-has-video="true" data-video-id={video.id}>
+    <div ref={grid} className="om-hub-video-grid">{rowMajorColumns(visible, columns).map((column, c) => <div key={c} className="om-hub-video-column">{column.map(video => <article key={video.id} className="om-gallery-card om-hub-video" data-has-video="true" data-video-id={video.id} onMouseEnter={() => setPriorityId(video.id)} onMouseLeave={() => setPriorityId(current => (current === video.id ? null : current))}>
       <div className="om-gallery-card-media">
         <Button variant="plain" className="om-gallery-cover" style={{ aspectRatio: aspect(video) }}
           aria-label={t('Preview video {title}', { title: t(video.title) })} onClick={event => {
@@ -125,8 +148,8 @@ export function HubVideoWall({ hubId, signedIn, videos, title, query = '' }: { h
           </span>
         </Button>
         {/* Previews sit beside the button, never inside it; the button stays the single click target. */}
-        {!still && inView.has(video.id) && video.platform !== 'x' && <video className="om-gallery-animation" src={video.video} muted loop playsInline autoPlay aria-hidden="true" />}
-        {!still && inView.has(video.id) && video.platform === 'x' && <iframe className="om-gallery-animation" srcDoc={previewDocument(video)} sandbox="allow-scripts" allow="autoplay" tabIndex={-1} aria-hidden="true" title="" />}
+        {activeVideoIds.has(video.id) && video.platform !== 'x' && <HubCardVideo src={video.video} />}
+        {activeVideoIds.has(video.id) && video.platform === 'x' && <iframe className="om-gallery-animation" srcDoc={previewDocument(video)} sandbox="allow-scripts" allow="autoplay" tabIndex={-1} aria-hidden="true" title="" />}
       </div>
     </article>)}</div>)}</div>
     {open && <HubVideoDetail videos={shown} id={open} onChange={setOpen} onClose={() => setOpen(null)} returnFocus={returnFocus} title={title}

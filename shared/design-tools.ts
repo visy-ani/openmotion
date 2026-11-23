@@ -69,9 +69,9 @@ export const designTools = [
   {
     name: 'openmotion_design_project',
     title: 'OpenMotion · Design Project',
-    description: 'Create, inspect, organize, preview, open in a local app, export (zip, open-design round-trip zip, standalone html, pdf, png, pptx) and import (Open Design / Claude Design / OpenMotion ZIP or folder) HTML Design Studio projects. Call action=open after editing so the user gets the live previewUrl and Studio editorUrl. Export with outputPath writes the artifact to disk; delete requires the project to be in Trash first.',
+    description: 'Create, inspect, organize, preview, open in a local app, deploy to a live Open Design Cloud share link (deploy, deploy_status, unpublish), export (zip, open-design round-trip zip, standalone html, pdf, png, pptx) and import (Open Design / Claude Design / OpenMotion ZIP or folder) HTML Design Studio projects. Call action=open after editing so the user gets the live previewUrl and Studio editorUrl; call action=deploy (requires OpenDesign sign-in) to publish a unique HTTPS share URL. Export with outputPath writes the artifact to disk; delete requires the project to be in Trash first.',
     inputSchema: obj({
-      action: { enum: ['create', 'list', 'get', 'rename', 'duplicate', 'trash', 'restore', 'delete', 'open', 'open_in', 'export', 'import'] },
+      action: { enum: ['create', 'list', 'get', 'rename', 'duplicate', 'trash', 'restore', 'delete', 'open', 'open_in', 'export', 'import', 'deploy', 'deploy_status', 'unpublish'] },
       projectId: uuid,
       requestId: id,
       scenario: scenarioEnum,
@@ -84,6 +84,9 @@ export const designTools = [
       format: { enum: [...designExportFormats] },
       versionId: uuid,
       filePath: relPath,
+      workspaceId: { type: 'string', minLength: 1, maxLength: 128, description: 'Optional OpenDesign workspace ID for action=deploy (defaults to the signed-in personal workspace).' },
+      deployMode: { enum: ['publish', 'resume', 'new_link'], description: 'Deployment mode for action=deploy: publish (deploy or update live link), resume (reopen a stopped link), or new_link (allocate a fresh share URL).' },
+      refresh: { type: 'boolean', description: 'When true on action=deploy_status, verify live remote share status with OpenDesign.' },
       outputPath: { type: 'string', minLength: 1, maxLength: 1000, description: 'Optional local destination path for export.' },
       sourcePath: { type: 'string', minLength: 1, maxLength: 1000, description: 'Local ZIP file or project folder path for import.' },
     }, ['action']),
@@ -92,12 +95,13 @@ export const designTools = [
   {
     name: 'openmotion_design_edit',
     title: 'OpenMotion · Design Edit',
-    description: 'Read and edit files in an HTML Design Studio project with revision protection and version history. Always read the project first (openmotion_design_project action=get) to obtain current expectedRevision. Every action=write atomically persists files and creates a new immutable vN version snapshot. action=restore_version restores an older snapshot as a NEW version without erasing history.',
+    description: 'Read and edit files in an HTML Design Studio project with revision protection and version history. Always read the project first (openmotion_design_project action=get) to obtain current expectedRevision. Every action=write atomically persists files and creates a new immutable vN version snapshot. action=restore_version restores an older snapshot as a NEW version without erasing history. action=import_asset copies a pinned workspace asset version (assetId+versionId from openmotion_assets_use) into the project as a binary file and returns its project-relative path for use in HTML; requires expectedRevision; creates a new version.',
     inputSchema: obj({
-      action: { enum: ['read_file', 'write', 'list_versions', 'restore_version'] },
+      action: { enum: ['read_file', 'write', 'list_versions', 'restore_version', 'import_asset'] },
       projectId: uuid,
       requestId: id,
       expectedRevision: revision,
+      assetId: uuid,
       path: relPath,
       offset: { type: 'integer', minimum: 0, maximum: 50_000_000 },
       limit: { type: 'integer', minimum: 1, maximum: 500_000 },

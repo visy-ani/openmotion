@@ -8,6 +8,9 @@ export async function assetRequest<T>(args: Record<string, unknown>): Promise<T>
 export async function uploadLibraryAsset(file: File, { assetId, parentVersionId, modality }: { assetId?: string; parentVersionId?: string; modality?: 'video' } = {}) {
   if (file.size > MAX_ASSET_BYTES) throw new AssetUploadError('rejected', 'size');
   if (!file.size) throw new AssetUploadError('rejected', 'unreadable');
+  if (file.type === 'image/svg+xml' || /\.svgz?$/i.test(file.name)) {
+    throw new AssetUploadError('rejected', 'unsupported');
+  }
   const query = new URLSearchParams({ requestId: crypto.randomUUID() });
   if (assetId) query.set('assetId', assetId);
   if (parentVersionId) query.set('parentVersionId', parentVersionId);

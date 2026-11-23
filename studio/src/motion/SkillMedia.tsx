@@ -5,6 +5,7 @@ import type { MotionSkill, SkillMotif } from './skillCatalog';
 import { useSkillPreview } from './useSkillPreview';
 import { CoverPlaceholder } from '../components/ui/CoverPlaceholder';
 import { ExploreCoverImage } from './ExploreCoverImage';
+import { releaseMediaElement } from '../utils/releaseMediaElement';
 import './skills.css';
 
 /** Upstream demo media when available; otherwise the package-token illustration. */
@@ -42,6 +43,10 @@ function CoverMedia({ cover, video, play, large, onFail, brandedFallback }: { co
     if (!element || !video) return;
     if (play) void element.play().catch(() => {}); else element.pause();
   }, [play, video]);
+  useEffect(() => {
+    const element = player.current;
+    return () => releaseMediaElement(element);
+  }, [video, videoFailed]);
   if (brandedFallback) return <>
     <ExploreCoverImage src={video && !videoFailed ? cover.poster : (play && cover.gif ? cover.gif : cover.poster)} />
     {video && !videoFailed && <video ref={player} src={video} muted playsInline loop preload="auto" aria-hidden="true"

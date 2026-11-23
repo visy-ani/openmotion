@@ -136,13 +136,15 @@ function makeAsset(id: string, overrides: Partial<LibraryAsset> = {}, versionOve
 function makeBrowser(assets: LibraryAsset[]): ReturnType<typeof useAssetBrowser> {
   return {
     kind: 'audio',
+    audioKind: 'all',
+    setAudioKind: undefined as unknown as ReturnType<typeof useAssetBrowser>['setAudioKind'],
     query: '',
     setQuery: vi.fn(),
     source: 'all',
     setSource: vi.fn(),
     sort: 'newest',
     setSort: vi.fn(),
-    data: { key: 'audio|all|newest|0', assets, total: assets.length, nextOffset: null },
+    data: { key: 'audio|all|all|newest|0', assets, total: assets.length, nextOffset: null },
     stale: false,
     loading: false,
     error: false,
@@ -221,6 +223,7 @@ describe('sound domain helpers', () => {
     expect(resolveSavedVoiceName('21m00Tcm4TlvDq8ikWAM', elevenSpeech.id, [elevenSpeech])).toBe('Rachel');
     expect(resolveSavedVoiceName(undefined, elevenSpeech.id, [elevenSpeech], true)).toBe('Rachel');
     expect(resolveSavedVoiceName('af_heart', kokoroSpeech.id, [kokoroSpeech])).toBe('Heart');
+    expect(resolveSavedVoiceName('custom_voice_99', elevenSpeech.id, [elevenSpeech])).toBe('custom_voice_99');
   });
 
   it('identifies dedicated SFX models and classifies audio tracks cleanly', () => {
@@ -519,10 +522,13 @@ describe('SoundStudioWorkspace', () => {
         source: 'live',
       });
 
-      // 1. Kokoro voice cards expose bundled preview buttons alongside the active model badge and play inline.
+      // 1. Kokoro voice cards balance female & male featured options without duplicating the model name badge.
       const kokoroStudio = makeStudio('speech', kokoroSpeech.id);
       await renderSound(kokoroStudio, { assets: [] });
-      expect(host.querySelector('.om-sound-voice-model-badge')?.textContent).toBe('Kokoro');
+      expect(host.querySelector('.om-sound-voice-model-badge')).toBeNull();
+      const kokoroTexts = [...host.querySelectorAll('.om-sound-voice-card .om-sound-voice-select')].map(el => el.textContent ?? '');
+      expect(kokoroTexts.some(text => text.includes('Female'))).toBe(true);
+      expect(kokoroTexts.some(text => text.includes('Male'))).toBe(true);
       const previewAlloy = host.querySelector<HTMLButtonElement>('button[aria-label="Preview Alloy"]');
       expect(previewAlloy).not.toBeNull();
       const heartSelect = host.querySelector<HTMLButtonElement>('.om-sound-voice-card[data-selected="true"] .om-sound-voice-select')!;
@@ -533,7 +539,7 @@ describe('SoundStudioWorkspace', () => {
       expect(kokoroAudio?.getAttribute('src')).toBe('blob:test-audio/mp4');
       expect(host.querySelector('.om-sound-voice-card[data-selected="true"] .om-sound-voice-select')?.textContent).toContain('Heart');
 
-      // 2. ElevenLabs voice cards expose all 6 official previews even if backend generationOptions omits previewUrl.
+      // 2. ElevenLabs voice cards expose all 6 official previews, cache repeat auditions, and keep the main Player Dock intact.
       const staleBackendEleven: Model = {
         ...elevenSpeech,
         generationOptions: {
@@ -544,21 +550,39 @@ describe('SoundStudioWorkspace', () => {
           })),
         },
       };
+      const existingSpeechAsset = makeAsset('speech-keep-dock', { name: 'Existing VO' }, { model: staleBackendEleven.id, prompt: 'Keep dock open' });
       const elevenStudio = makeStudio('speech', staleBackendEleven.id, ['account'], [staleBackendEleven, byteplusSpeech, kokoroSpeech]);
-      await renderSound(elevenStudio, { assets: [] });
-      expect(host.querySelector('.om-sound-voice-model-badge')?.textContent).toBe('ElevenLabs Voice');
+      await renderSound(elevenStudio, { assets: [existingSpeechAsset] });
+      expect(host.querySelector('.om-sound-voice-model-badge')).toBeNull();
       expect(host.querySelectorAll('.om-sound-voice-preview')).toHaveLength(6);
+      // Start a library track so bottom Player Dock is visible, then audition a voice -> dock stays open!
+      const rowPlay = host.querySelector<HTMLButtonElement>('.om-sound-track-row .om-sound-row-play')!;
+      await act(async () => { rowPlay.click(); });
+      expect(host.querySelector('.om-sound-player-dock')).not.toBeNull();
       const previewGeorge = host.querySelector<HTMLButtonElement>('button[aria-label="Preview George"]')!;
       await act(async () => { previewGeorge.click(); });
+      expect(host.querySelector('.om-sound-player-dock')).not.toBeNull();
       expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('JBFqnCBsd6RMkjVDRZzb'), expect.anything());
+      const georgeCallsBefore = fetchMock.mock.calls.filter(c => String(c[0]).includes('JBFqnCBsd6RMkjVDRZzb')).length;
       const elevenAudio = host.querySelector<HTMLAudioElement>('.om-sound-voice-audio-host audio');
       expect(elevenAudio?.getAttribute('src')).toBe('blob:test-audio/mpeg');
+      // Switching to Rachel and back to George reuses the cached Blob URL without re-fetching George.
+      const previewRachel = host.querySelector<HTMLButtonElement>('button[aria-label="Preview Rachel"]')!;
+      await act(async () => { previewRachel.click(); });
+      await act(async () => { previewGeorge.click(); });
+      const georgeCallsAfter = fetchMock.mock.calls.filter(c => String(c[0]).includes('JBFqnCBsd6RMkjVDRZzb')).length;
+      expect(georgeCallsAfter).toBe(georgeCallsBefore);
+      // Selecting another voice never pops a redundant Reset icon in the Voice header.
+      const georgeSelect = [...host.querySelectorAll<HTMLButtonElement>('.om-sound-voice-select')].find(b => b.textContent?.includes('George'))!;
+      await act(async () => { georgeSelect.click(); });
+      expect(host.querySelector('button[aria-label="Reset Speech voice"]')).toBeNull();
 
-      // 3. BytePlus Vivi exposes its bundled audition sample inline; unlisted custom voices have no preview button.
+      // 3. BytePlus Vivi uses a full-width single-column grid and exposes its bundled audition sample inline.
       expect(resolveVoicePreview(byteplusSpeech, 'zh_female_vv_uranus_bigtts')?.blobSource).toBe(true);
       expect(resolveVoicePreview(byteplusSpeech, 'zh_female_unlisted_voice')).toBeUndefined();
       const byteplusStudio = makeStudio('speech', byteplusSpeech.id, ['account'], [byteplusSpeech]);
       await renderSound(byteplusStudio, { assets: [] });
+      expect(host.querySelector('.om-sound-voice-grid')?.getAttribute('data-columns')).toBe('1');
       const previewVivi = host.querySelector<HTMLButtonElement>('button[aria-label="Preview Vivi"]');
       expect(previewVivi).not.toBeNull();
       await act(async () => { previewVivi!.click(); });
@@ -598,9 +622,12 @@ describe('SoundStudioWorkspace', () => {
     expect(host.querySelectorAll('.om-sound-track-row')).toHaveLength(1);
     expect(host.querySelector('.om-sound-row-title')?.textContent).toBe('Launch VO');
 
-    // Copy pinned asset reference.
-    const copyBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Copy asset reference"]')!;
-    await act(async () => { copyBtn.click(); });
+    // Open overflow menu -> Copy pinned asset reference.
+    const moreBtn = host.querySelector<HTMLButtonElement>('button[aria-label="More actions"]')!;
+    await act(async () => { moreBtn.click(); });
+    const copyItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(el => el.textContent?.includes('Copy asset reference'))!;
+    expect(copyItem).toBeTruthy();
+    await act(async () => { copyItem.click(); });
     expect(writeText).toHaveBeenCalledWith('speech-1/v1');
     expect(onNotify).toHaveBeenCalledWith('Asset reference copied');
 
@@ -613,12 +640,13 @@ describe('SoundStudioWorkspace', () => {
       elevenSpeech.id,
     );
 
-    // Play track -> lean player dock opens with playback-only controls (no duplicated asset actions),
+    // Play track -> lean player dock opens with playback-only controls + voice/model subtitle,
     // supports click-to-locate, auto-pauses when workspace hides, and closes when track is trashed.
     const playBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Play Launch VO"]')!;
     await act(async () => { playBtn.click(); });
     const dock = host.querySelector('.om-sound-player-dock')!;
     expect(dock).not.toBeNull();
+    expect(dock.querySelector('.om-sound-dock-subtitle')?.textContent).toContain('Rachel');
     expect(dock.querySelector('button[aria-label="Copy asset reference"]')).toBeNull();
     expect(dock.querySelector('button[aria-label="Asset details"]')).toBeNull();
     expect(dock.querySelector('button[aria-label="Reuse prompt"]')).toBeNull();
@@ -627,6 +655,9 @@ describe('SoundStudioWorkspace', () => {
     expect(dock.querySelector('button[aria-label="Playback speed"]')).not.toBeNull();
     expect(dock.querySelector('button[aria-label="Close player"]')).not.toBeNull();
     expect(playSpy).toHaveBeenCalled();
+
+    // Row duration stays fixed to total duration while playing so the waveform column never shifts.
+    expect(host.querySelector('.om-sound-row-duration')?.textContent).toBe('00:18');
 
     const locateBtn = dock.querySelector<HTMLButtonElement>('button[aria-label="Locate Launch VO"]')!;
     expect(locateBtn).not.toBeNull();
@@ -638,13 +669,16 @@ describe('SoundStudioWorkspace', () => {
     expect(pauseSpy).toHaveBeenCalled();
     await setActive(true);
 
-    const trashBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Move to trash"]')!;
-    await act(async () => { trashBtn.click(); });
+    // Open overflow menu -> Move to trash.
+    await act(async () => { host.querySelector<HTMLButtonElement>('button[aria-label="More actions"]')!.click(); });
+    const trashItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(el => el.textContent?.includes('Move to trash'))!;
+    expect(trashItem).toBeTruthy();
+    await act(async () => { trashItem.click(); });
     expect(onTrashAsset).toHaveBeenCalledWith('speech-1');
     expect(host.querySelector('.om-sound-player-dock')).toBeNull();
   });
 
-  it('shows file size and creation time as the subtitle for AI-generated audio rows without duplicating the prompt', async () => {
+  it('promotes speech voice as a chip (even when legacy records omitted default voice) and omits raw byte noise in rows', async () => {
     const generatedSpeech = makeAsset(
       'speech-meta-1',
       { name: 'Today is a good day' },
@@ -653,7 +687,7 @@ describe('SoundStudioWorkspace', () => {
         model: elevenSpeech.id,
         prompt: 'Today is a good day',
         bytes: 469_811,
-        parameters: { voice: '21m00Tcm4TlvDq8ikWAM' },
+        parameters: {},
       },
     );
     const uploadedAudio = makeAsset(
@@ -677,11 +711,18 @@ describe('SoundStudioWorkspace', () => {
     const uploadedRow = rows[1]!;
 
     expect(generatedRow.querySelector('.om-sound-row-title')?.textContent).toBe('Today is a good day');
+    // Voice chip resolves model default voice even for legacy empty-parameter records.
+    expect(generatedRow.querySelector('.om-sound-voice-chip')?.textContent).toBe('Rachel');
+    expect(generatedRow.querySelector('.om-sound-row-source')?.textContent).toBe('Eleven v3');
+    // Raw byte counts belong in details, not cluttered into list rows; day group avoids repeating date.
     const generatedDesc = generatedRow.querySelector('.om-sound-row-desc')?.textContent ?? '';
     const uploadedDesc = uploadedRow.querySelector('.om-sound-row-desc')?.textContent ?? '';
-    expect(generatedDesc).toContain('458.8 KB');
+    expect(generatedDesc).not.toContain('KB');
     expect(generatedDesc).not.toContain('Today is a good day');
     expect(generatedDesc).toBe(uploadedDesc);
+    // Mixed generated + uploaded tracks expose the Source filter and Upload type option.
+    expect(host.querySelector('[aria-label="Source"]')).not.toBeNull();
+    expect([...host.querySelectorAll('.om-sound-source-tabs button')].some(b => b.textContent === 'Local upload')).toBe(true);
   });
 
   it('renders an in-place generating waveform row, morphs seamlessly to the completed track with playhead, and resets incompatible filters', async () => {
@@ -731,7 +772,7 @@ describe('SoundStudioWorkspace', () => {
     expect(genRow.querySelector('.om-sound-row-spinner')).not.toBeNull();
     expect(genRow.querySelector('.om-sound-wave-generating')).not.toBeNull();
     expect(genRow.textContent).toContain('Rachel');
-    expect(genRow.textContent).toContain('ElevenLabs Voice');
+    expect(genRow.textContent).toContain('Eleven v3');
     expect(host.querySelectorAll('.om-sound-day-group').length).toBeGreaterThanOrEqual(1);
 
     // Cancel action calls onCancelJob.
@@ -853,6 +894,7 @@ describe('SoundStudioWorkspace', () => {
       // 3-node visual pipeline rendered cleanly.
       expect(host.querySelectorAll('.om-sound-pipeline-node')).toHaveLength(3);
       expect(host.querySelector('.om-sound-soon-title')?.textContent).toBe(tab.label);
+      expect(host.querySelector<HTMLAnchorElement>('.om-sound-soon-footer .om-coming-soon-actions a')?.href).toBe('https://github.com/nexu-io/openmotion');
 
       // Clicking pivot CTA routes to nearest live tab.
       const pivotBtn = host.querySelector<HTMLButtonElement>('.om-sound-soon-footer button')!;
@@ -916,7 +958,8 @@ describe('SoundStudioWorkspace', () => {
     await act(async () => { rachelCard.click(); });
     expect(host.querySelector('input[aria-label="Custom voice ID"]')).toBeNull();
 
-    // 3. Unknown third-party BYOK model without structured fields retains the raw JSON fallback.
+    // 3. Unknown third-party BYOK model without structured fields retains the raw JSON fallback,
+    // and editing or clearing raw JSON never leaves sticky values behind.
     const customByokSpeech: Model = {
       id: 'fal:custom/tts-v1',
       provider: 'fal',
@@ -927,9 +970,37 @@ describe('SoundStudioWorkspace', () => {
       source: 'manual',
     };
     const byokStudio = makeStudio('speech', customByokSpeech.id, ['fal'], [customByokSpeech]);
-    await renderSound(byokStudio, { assets: [] });
+    await renderSound(byokStudio, { assets: [], initialPrompt: 'Raw JSON test.' });
     expect(host.querySelector('.om-sound-advanced')).not.toBeNull();
-    expect(host.querySelector('textarea[aria-label="Model parameters"]')).not.toBeNull();
+    const jsonBox = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Model parameters"]')!;
+    expect(jsonBox).not.toBeNull();
+
+    const setTextarea = async (value: string) => {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+        setter.call(jsonBox, value);
+        jsonBox.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+
+    await setTextarea('{"speed": 1.2}');
+    await setTextarea('{"speed": 1.5}');
+    assetRequestMock.mockClear();
+    await act(async () => { host.querySelector<HTMLButtonElement>('.om-creation-submit-button')!.click(); });
+    expect(assetRequestMock).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'generate',
+      model: customByokSpeech.id,
+      parameters: { speed: 1.5 },
+    }));
+
+    await setTextarea('{}');
+    assetRequestMock.mockClear();
+    await act(async () => { host.querySelector<HTMLButtonElement>('.om-creation-submit-button')!.click(); });
+    expect(assetRequestMock).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'generate',
+      model: customByokSpeech.id,
+      parameters: {},
+    }));
   });
 
   it('keeps Sound Studio translations complete across all supported locales without invalid terminology', () => {
@@ -957,5 +1028,87 @@ describe('SoundStudioWorkspace', () => {
     expect(translate('zh-CN', 'Dubbing')).toBe('翻译配音');
     expect(translate('zh-CN', 'Isolate & stems')).toBe('分离与降噪');
     expect(translate('zh-CN', 'New')).toBe('新');
+    expect(translate('zh-CN', 'More actions')).toBe('更多操作');
+  });
+
+  it('hides redundant Source filter when only AI tracks exist, opens details from row info, and shows per-type starters on empty category tabs', async () => {
+    const speechAsset = makeAsset('speech-only-1', { name: 'Launch VO' }, { model: elevenSpeech.id, prompt: 'Welcome to OpenMotion', parameters: {} });
+    const studio = makeStudio('speech', elevenSpeech.id);
+    const onOpenAsset = vi.fn();
+
+    // Render directly with onOpenAsset spy to verify row-info click opens details cleanly.
+    const browser = makeBrowser([speechAsset]);
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <SoundStudioWorkspace
+            active
+            studio={studio}
+            draft={{ modality: 'audio', prompt: '', references: [] }}
+            setDraft={vi.fn()}
+            browser={browser}
+            jobs={[]}
+            uploading={false}
+            updatingAssets={new Set()}
+            mobileView="library"
+            setMobileView={vi.fn()}
+            onUploadClick={vi.fn()}
+            onDropFiles={vi.fn()}
+            onOpenAsset={onOpenAsset}
+            onTrashAsset={vi.fn(async () => true)}
+            onCancelJob={vi.fn()}
+            onRetrySave={vi.fn(async () => {})}
+            onResumeJob={vi.fn(async () => {})}
+            onViewJob={vi.fn()}
+            onCreated={vi.fn()}
+            onError={vi.fn()}
+            onNotify={vi.fn()}
+            onDownload={vi.fn()}
+          />
+        </I18nProvider>,
+      );
+    });
+
+    // Zero uploaded tracks -> hide redundant Source filter dropdown.
+    expect(host.querySelector('[aria-label="Source"]')).toBeNull();
+
+    // Clicking the track info block opens asset details directly.
+    const infoBtn = host.querySelector<HTMLButtonElement>('.om-sound-row-info-btn')!;
+    expect(infoBtn).not.toBeNull();
+    await act(async () => { infoBtn.click(); });
+    expect(onOpenAsset).toHaveBeenCalledWith(speechAsset);
+
+    // Switching to an empty Music filter surfaces Music starters rather than a dead empty state,
+    // and clicking Use forwards the prompt through selectSoundTab so draftKey switches preserve it.
+    const musicFilter = [...host.querySelectorAll<HTMLButtonElement>('.om-sound-source-tabs button')].find(b => b.textContent === 'Music')!;
+    await act(async () => { musicFilter.click(); });
+    expect(host.querySelector('.om-sound-starters')).not.toBeNull();
+    expect(host.querySelector('.om-sound-sample-row')).not.toBeNull();
+    const musicUseBtn = host.querySelector<HTMLButtonElement>('.om-sound-sample-row .om-sound-use-btn')!;
+    await act(async () => { musicUseBtn.click(); });
+    expect(studio.selectSoundTab).toHaveBeenCalledWith(
+      'music',
+      expect.objectContaining({ modality: 'audio', prompt: expect.stringContaining('soft piano') }),
+    );
+
+    // Switching to an empty SFX filter from the Speech tab forwards both cue and SFX parameters to the SFX model.
+    const sfxFilter = [...host.querySelectorAll<HTMLButtonElement>('.om-sound-source-tabs button')].find(b => b.textContent === 'Sound effects')!;
+    await act(async () => { sfxFilter.click(); });
+    const sfxUseBtn = host.querySelector<HTMLButtonElement>('.om-sound-starter-row .om-sound-use-btn')!;
+    await act(async () => { sfxUseBtn.click(); });
+    expect(studio.selectSoundTab).toHaveBeenCalledWith(
+      'sfx',
+      expect.objectContaining({
+        modality: 'audio',
+        prompt: expect.stringContaining('Crisp glassy UI confirmation tap'),
+        model: falSfx.id,
+        parameters: expect.objectContaining({ duration_seconds: 2 }),
+      }),
+      falSfx.id,
+    );
+
+    // Persisted audioKind overrides ID-only fallback even for opaque model IDs without catalog entries.
+    expect(classifyAudioTrackTab('opendesign:acme/narrator-v2', undefined, 'generated', 'speech')).toBe('speech');
+    expect(classifyAudioTrackTab('opendesign:acme/impact-v1', undefined, 'generated', 'sfx')).toBe('sfx');
   });
 });

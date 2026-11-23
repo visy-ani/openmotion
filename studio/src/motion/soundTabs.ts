@@ -1,3 +1,4 @@
+import { classifyAudioKind, isAudioKind, isSfxModelText, type AudioKind } from '../../../shared/audio-kind';
 import type { Model } from '../../../shared/gateway';
 
 export type SoundLiveTabId = 'music' | 'sfx' | 'speech';
@@ -124,24 +125,22 @@ export function isExtendedSoundTab(id: string | null | undefined): id is Exclude
 
 /** Identify dedicated sound-effects / foley endpoints without misclassifying music generators. */
 export function isSfxModel(model: Pick<Model, 'id' | 'modelId' | 'label'>): boolean {
-  const haystack = `${model.id} ${model.modelId} ${model.label}`.toLowerCase();
-  return /sound[-_ ]?effects?|\bsfx\b|foley|audio[-_ ]?effects?/.test(haystack);
+  return isSfxModelText(`${model.id} ${model.modelId} ${model.label}`);
 }
 
 /** Infer which live Sound Studio domain produced a saved audio asset version. */
 export function classifyAudioTrackTab(
   modelId: string | undefined,
   models: readonly Model[] | undefined,
-): SoundLiveTabId | 'upload' {
+  source?: string,
+  savedAudioKind?: AudioKind,
+): AudioKind {
+  if (source === 'upload') return 'upload';
+  if (isAudioKind(savedAudioKind)) return savedAudioKind;
   if (!modelId) return 'upload';
   const matched = models?.find(model => model.id === modelId);
   if (matched) {
-    if (matched.mode === 'text-to-speech') return 'speech';
-    if (isSfxModel(matched)) return 'sfx';
-    return 'music';
+    return classifyAudioKind(matched.id, matched.mode, source, `${matched.modelId} ${matched.label}`);
   }
-  const lower = modelId.toLowerCase();
-  if (/sound[-_ ]?effects?|\bsfx\b|foley/.test(lower)) return 'sfx';
-  if (/tts|speech|kokoro|voice|elevenlabs-v3/.test(lower)) return 'speech';
-  return 'music';
+  return classifyAudioKind(modelId, undefined, source);
 }

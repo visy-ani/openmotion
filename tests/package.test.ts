@@ -5,7 +5,7 @@ import { zip } from '../scripts/package.ts';
 import { distributionFiles } from '../scripts/distribution.ts';
 import { getWorkflow, workflowRegistry } from '../shared/workflow.ts';
 import { designSystemDocuments, designSystemRuntimeFiles } from '../packages/design-system/index.js';
-import { readFile, mkdtemp, mkdir, copyFile, rm } from 'node:fs/promises';
+import { readFile, readdir, mkdtemp, mkdir, copyFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -52,6 +52,13 @@ test('every distribution preserves public workflow dependencies and licenses whi
     assert(![...files].some(file => (file.startsWith('library/templates/catalog/') && !onboardingSourceFiles.includes(file)) || /scripts\/(?:template-library|check-template-library)\.ts$/.test(file)), 'The source catalog and contribution tools must not inflate application packages');
     for (const file of ['docs/assets.md', 'docs/generation-options.md', 'gateway/asset-library.ts', 'gateway/account-media.ts', 'gateway/asset-chat.ts', 'gateway/asset-read.ts', 'shared/asset-tools.ts', 'shared/generation-options.ts']) assert(files.has(file), 'Missing asset runtime or guide: ' + file);
     for (const file of ['scripts/prepare-font.ts', 'scripts/font-specimen.ts', 'shared/font-catalog.ts', 'shared/import-font.ts', 'skills/openmotion-production/fonts/catalog.json']) assert(files.has(file), 'Missing font dependency: ' + file);
+    for (const file of ['game-projects.ts', 'shared/game-contract.ts', 'shared/game-tools.ts', 'skills/openmotion-game/SKILL.md', 'skills/openmotion-game/LICENSE-HIGGSFIELD']) assert(files.has(file), 'Missing Game Studio dependency: ' + file);
+    for (const file of ['scripts/game-glb-inspect.mjs', 'templates/game-kits/coop-3d/index.html', 'templates/game-kits/coop-3d/client.js', 'templates/game-kits/coop-3d/logic.js', 'templates/game-kits/coop-3d/style.css', 'templates/game-kits/vendor/three.module.min.js', 'templates/game-kits/vendor/GLTFLoader.js', 'templates/game-kits/vendor/SkeletonUtils.js', 'templates/game-kits/vendor/BufferGeometryUtils.js', 'templates/game-kits/characters/Mage.glb', 'templates/game-kits/characters/Knight.glb', 'templates/game-kits/characters/LICENSE-KayKit.txt']) assert(files.has(file), 'Missing offline game kit dependency: ' + file);
+    const gameTemplates = await readdir(new URL('../templates/games/', import.meta.url), { recursive: true, withFileTypes: true }).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
+    for (const entry of gameTemplates) if (entry.isFile()) {
+      const relative = path.relative(fileURLToPath(new URL('../', import.meta.url)), path.join(entry.parentPath, entry.name)).split(path.sep).join('/');
+      assert(files.has(relative), 'Missing shipped game template file: ' + relative);
+    }
     assert(files.has('shared/asset-limits.ts'), 'The shared asset import limit must ship');
     for (const file of ['docs/brand-kits.md', 'shared/brand-kit.ts', 'shared/brand-catalog.ts', 'gateway/brand-catalog.ts', 'library/brand-kits/catalog.json', 'library/brand-kits/OPENDESIGN-LICENSE.txt', 'library/brand-kits/THIRD-PARTY-NOTICES.txt', 'library/brand-kits/NOTICE.md', 'library/brand-kits/assets/gsap.min.js', 'gateway/brand-http.ts', 'gateway/brand-kits.ts', 'gateway/brand-network.ts', 'gateway/brand-extract.ts', 'gateway/brand-sampler.mjs', 'gateway/brand-assets.ts', 'gateway/brand-context.ts', 'shared/brand-capture.ts', 'gateway/brand-capture/design-style-extractor.mjs', 'gateway/brand-capture/token-extractor.mjs', 'gateway/brand-capture/browser-helpers.mjs', 'gateway/brand-capture/LICENSE', 'gateway/brand-capture/NOTICE.md', 'gateway/brand-package.ts', 'gateway/brand-showcase.ts']) assert(files.has(file), 'Missing Brand Kit runtime dependency: ' + file);
     assert.equal([...files].filter(file => /^library\/brand-kits\/sources\/[^/]+\/(DESIGN.md|tokens.css|manifest.json)$/.test(file)).length, 152 * 3);
@@ -99,7 +106,7 @@ test('ZIP stores UTF-8 names and file sizes in local and central headers', () =>
 
 test('source and distribution expose only canonical Skill folders', async () => {
   const { readdir } = await import('node:fs/promises');
-  const core = ['openmotion', 'openmotion-design', 'openmotion-director', 'openmotion-media', 'openmotion-production', 'openmotion-recreate', 'openmotion-template-to-video', 'openmotion-video-to-template'];
+  const core = ['openmotion', 'openmotion-design', 'openmotion-director', 'openmotion-game', 'openmotion-media', 'openmotion-production', 'openmotion-recreate', 'openmotion-template-to-video', 'openmotion-video-to-template'];
   const library = ['openmotion-ad-script', 'openmotion-adaptive-layout', 'openmotion-ai-assistant-tour', 'openmotion-archive-collage', 'openmotion-article-illustrations', 'openmotion-aurora-gradient', 'openmotion-before-after', 'openmotion-bilingual-captions', 'openmotion-bold-type-poster', 'openmotion-brandkit', 'openmotion-bubble-field', 'openmotion-caption-styling', 'openmotion-card-carousel', 'openmotion-cards-and-text', 'openmotion-chalk-blueprint', 'openmotion-cinematic-logo', 'openmotion-clay-explainer', 'openmotion-color-pop-poster', 'openmotion-content-cover', 'openmotion-coral-title-cards', 'openmotion-corner-frames', 'openmotion-dark-premium-poster', 'openmotion-design-remix', 'openmotion-design-styles', 'openmotion-doc-promo', 'openmotion-echo-stack-type', 'openmotion-edit-to-script', 'openmotion-editorial-explainer', 'openmotion-editorial-poster', 'openmotion-editorial-webinar', 'openmotion-electric-impact-type', 'openmotion-felt-stop-motion', 'openmotion-flat-beat', 'openmotion-flat-card-explainer', 'openmotion-flat-lay-product', 'openmotion-folder-pop', 'openmotion-footage-to-handpainted', 'openmotion-giant-flip-type', 'openmotion-glitch-logo-sting', 'openmotion-growth-teardown', 'openmotion-hand-drawn-explainer', 'openmotion-hidden-feature-demo', 'openmotion-highlighter-notes', 'openmotion-in-hand-product', 'openmotion-ink-ribbon', 'openmotion-isometric-card-flight', 'openmotion-juicy-splash-poster', 'openmotion-light-shadow-product', 'openmotion-liquid-blob', 'openmotion-liquid-glass-logo', 'openmotion-liquid-logo', 'openmotion-livestream-clips', 'openmotion-magnet-particles', 'openmotion-manifesto-pop', 'openmotion-monochrome-magazine', 'openmotion-motion-graphic-placement', 'openmotion-multi-clips-to-reels', 'openmotion-multicam-edit', 'openmotion-mystery-box-reveal', 'openmotion-neon-outline-type', 'openmotion-nova-intro', 'openmotion-one-bit-dither', 'openmotion-orange-unfiltered', 'openmotion-paper-collage-explainer', 'openmotion-paper-diorama', 'openmotion-paper-map-journey', 'openmotion-paper-stop-motion', 'openmotion-pastel-flat-2d', 'openmotion-pixel-art-explainer', 'openmotion-pop-style', 'openmotion-premium-halo', 'openmotion-presenter-story', 'openmotion-push-in-type', 'openmotion-quantum-particles', 'openmotion-red-pen-archive', 'openmotion-relight-reveal', 'openmotion-retro-flat-scene', 'openmotion-retro-print-poster', 'openmotion-ring-mask-reveal', 'openmotion-runway-rebel', 'openmotion-sale-carousel', 'openmotion-sale-countdown', 'openmotion-sale-promo', 'openmotion-shortlist-shorts', 'openmotion-shot-breakdown', 'openmotion-shutter-bands', 'openmotion-smooth-wipes', 'openmotion-spec-sheet', 'openmotion-splash-float-product', 'openmotion-split-slot-type', 'openmotion-step-by-step-tutorial', 'openmotion-sticker-bounce', 'openmotion-sticker-peel', 'openmotion-storyboard-to-motion', 'openmotion-storybook-myth', 'openmotion-surreal-3d-poster', 'openmotion-talking-head-recreation', 'openmotion-time-freeze', 'openmotion-translucent-glass', 'openmotion-velocity-lines', 'openmotion-website-launch', 'openmotion-whiteboard-doodle', 'openmotion-whiteboard-marker', 'openmotion-wireframe-style'];
   assert.deepEqual((await readdir(new URL('../skills/', import.meta.url))).filter(name => !name.startsWith('.')).sort(), core);
   assert.deepEqual((await readdir(new URL('../library/skills/', import.meta.url))).sort(), library);
@@ -167,6 +174,26 @@ test('packaged server imports without local dependencies and captions use the se
     const result = spawnSync(process.execPath, ['--experimental-strip-types', '--input-type=module', '-e', script], { cwd: extracted, encoding: 'utf8', timeout: 30000 });
     assert.equal(result.status, 0, result.stderr || result.error?.message);
   } finally { await rm(extracted, { recursive: true, force: true }); }
+});
+
+test('offline game kit, handbook, binary characters, inspector and licenses survive lightweight packaging', async () => {
+  for (const profile of ['phase1', 'legacy']) {
+    const files = new Set(await distributionFiles(profile, file => file.startsWith('templates/game-kits/') || file.startsWith('skills/openmotion-game/') || file === 'scripts/game-glb-inspect.mjs'));
+    const entries = await readdir(new URL('../templates/game-kits/', import.meta.url), {recursive:true,withFileTypes:true});
+    assert(files.has('scripts/game-glb-inspect.mjs'));
+    assert(files.has('skills/openmotion-game/SKILL.md'));
+    assert(files.has('skills/openmotion-game/LICENSE-HIGGSFIELD'));
+    assert(files.has('skills/openmotion-game/PROVENANCE.md'));
+    for (const section of Object.keys(workflowRegistry.game.sections)) {
+      const document = await getWorkflow(section, 'game');
+      assert(files.has(document.documentId), 'Missing game handbook resource: ' + document.documentId);
+      for (const reference of document.references) assert(files.has(reference.documentId), 'Missing game handbook reference: ' + reference.documentId);
+    }
+    for (const entry of entries) if(entry.isFile()) {
+      const relative = path.relative(fileURLToPath(new URL('../', import.meta.url)), path.join(entry.parentPath, entry.name)).split(path.sep).join('/');
+      assert(files.has(relative), 'Missing offline kit file: '+relative);
+    }
+  }
 });
 
 test('Codex plugin manifest and Skill catalog metadata stay in English', async () => {

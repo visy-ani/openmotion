@@ -365,3 +365,41 @@ test('OPEND-5424 generation timing, cross-shot consistency and mixed-media bound
   assert.ok(v2tVerify.content.includes('reference-video.md#check-fidelity-and-edit-dependencies'));
   assert.doesNotMatch(v2tVerify.content, /no fixed number of permitted rounds/);
 });
+
+test('surgical editing, readable source formatting and template adaptation stay decoupled in their single owners', async () => {
+  const edit = await getWorkflow('edit');
+  assert.ok(edit.content.split('\n').includes('### 大文件原地修改与保存前结构核对'));
+  assert.match(edit.content, /data-composition-src[\s\S]*data-hf-id[\s\S]*90%[\s\S]*70%/);
+  assert.match(edit.content, /最多重做 1 次/);
+
+  const native = await getWorkflow('native');
+  assert.ok(native.content.split('\n').includes('### Readable multi-line source'));
+
+  const reference = await getWorkflow('reference');
+  assert.ok(reference.content.includes('native.md#readable-multi-line-source'));
+  assert.ok(reference.references.some(ref => ref.workflow === 'production' && ref.section === 'native'));
+
+  const v2tVerify = await getWorkflow('verification', 'video-to-template');
+  assert.ok(v2tVerify.content.includes('native.md#readable-multi-line-source'));
+  const recreateVerify = await getWorkflow('verification', 'recreate');
+  assert.ok(recreateVerify.content.includes('native.md#readable-multi-line-source'));
+
+  const templateStart = await getWorkflow('start', 'template');
+  assert.ok(templateStart.content.includes('edit.md#大文件原地修改与保存前结构核对'));
+  assert.ok(templateStart.content.includes('references/adaptation.md'));
+  assert.ok(templateStart.content.includes('fonts.md#use-the-normal-project-write-boundary'));
+  assert.ok(templateStart.references.some(ref => ref.workflow === 'template' && ref.section === 'adaptation'));
+  assert.ok(templateStart.references.some(ref => ref.workflow === 'production' && ref.section === 'edit'));
+  assert.ok(templateStart.references.some(ref => ref.workflow === 'production' && ref.section === 'fonts'));
+
+  const adaptation = await getWorkflow('adaptation', 'template');
+  assert.equal(adaptation.documentId, 'skills/openmotion-template-to-video/references/adaptation.md');
+  assert.ok(adaptation.references.some(ref => ref.workflow === 'production' && ref.section === 'edit'));
+  assert.ok(adaptation.references.some(ref => ref.workflow === 'production' && ref.section === 'materials'));
+  assert.ok(adaptation.references.some(ref => ref.workflow === 'production' && ref.section === 'sound'));
+  assert.ok(adaptation.content.includes('edit.md#大文件原地修改与保存前结构核对'));
+  assert.ok(adaptation.content.includes('edit.md#让下一轮接着当前结果'));
+  assert.ok(adaptation.content.includes('sound.md#配音与可编辑字幕协同'));
+  assert.match(adaptation.content, /Hard cap[\s\S]*Approximate target|Approximate target[\s\S]*Hard cap/);
+  assert.match(adaptation.content, /Narration\/TTS precedence/);
+});

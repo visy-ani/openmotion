@@ -9,6 +9,8 @@ export {
   ContextMenu,
   Menu,
   MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
   MenuItem,
   MenuRadioGroup,
   MenuRadioItem,

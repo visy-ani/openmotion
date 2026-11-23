@@ -60,7 +60,7 @@ export function MediaGenerator({ request, onClose, onSettings }: { request: Medi
   const activeProjectId = usePlayerStore(s => s.timelineProjectId);
   const activeSession = usePlayerStore(s => s.timelineSessionEpoch);
   const openingSession = useRef({ projectId: activeProjectId, epoch: activeSession });
-  const boundProjectId = useRef(request.target?.projectId ?? requestedProject(location.search, location.hash) ?? activeProjectId);
+  const boundProjectId = useRef(request.target?.projectId ?? requestedProject(location.search, location.hash, location.pathname) ?? activeProjectId);
   const projectStatusPath = 'project/status' + (boundProjectId.current ? '?projectId=' + encodeURIComponent(boundProjectId.current) : '');
   useEffect(() => {
     let active = true;

@@ -168,6 +168,17 @@ test('ASR model discovery, defaults and custom protocols use the existing provid
 
 test('subtitle parser accepts WebVTT short timestamps but rejects malformed cues instead of dropping them', () => {
   assert.equal(parseTranscriptSubtitles('WEBVTT\n\n00:01.000 --> 00:02.500\nHello')[0].end, 2.5);
+  // Voice, style and karaoke tags from other tools' WebVTT are not spoken text; an escaped "<" still is.
+  assert.equal(parseTranscriptSubtitles('WEBVTT\n\n00:01.000 --> 00:02.500\n<v Alice> Hello <i>there</i>, <00:01.800><c.loud>a &lt; b</c></v>')[0].text, 'Hello there, a < b');
+  assert.equal(parseTranscriptSubtitles('1\n00:00:01,000 --> 00:00:02,500\n<i>Hello</i>')[0].text, '<i>Hello</i>');
+  // A "<" that opens no WebVTT tag is text, and a cue of tags alone is left out without failing the file.
+  assert.equal(parseTranscriptSubtitles('WEBVTT\n\n00:01.000 --> 00:02.500\nprice < 10 and size > 5, <b>ok</b>')[0].text, 'price < 10 and size > 5, ok');
+  assert.deepEqual(parseTranscriptSubtitles('WEBVTT\n\n00:01.000 --> 00:02.000\nHello\n\n00:02.000 --> 00:03.000\n<v Bob></v>\n\n00:03.000 --> 00:04.000\nWorld').map(cue => cue.text), ['Hello', 'World']);
+  // A "<b " that never closes stays text up to the next tag, and a cue full of them is read once, not once per "<b ".
+  assert.equal(parseTranscriptSubtitles('WEBVTT\n\n00:01.000 --> 00:02.500\na <b and <i>so</i> on')[0].text, 'a <b and so on');
+  const started = Date.now();
+  assert.throws(() => parseTranscriptSubtitles(`WEBVTT\n\n00:01.000 --> 00:02.500\n${'<b '.repeat(600_000)}`), /Invalid transcript text/);
+  assert.ok(Date.now() - started < 5000, 'unclosed cue tags must not be rescanned from each one');
   assert.throws(() => parseTranscriptSubtitles('1\n00:99:00,000 --> 01:00:00,000\nBroken'), /Invalid subtitle timestamp/);
   assert.throws(() => parseTranscriptSubtitles('1\n00:00:01,000 --> 00:00:02,000\nGood\n\n2\nbad --> time\nBroken'), /Invalid subtitle cue/);
 });

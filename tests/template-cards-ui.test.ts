@@ -253,7 +253,7 @@ test('SDK drafts capture the exact template, never submit, suppress double click
     button.click(); button.click();
     assert.equal(f.messages.length, 1);
     assert.deepEqual(f.messages[0]._meta, { 'openai/message': { target: 'active', send: false } });
-    assert.equal(f.messages[0].content[0].text, 'Instructions: Use the OpenMotion plugin. If it is not installed, follow https://github.com/nexu-io/openmotion to install and connect it, then continue.\nSelected template: Decision Tree (decision-tree)\nCreative brief: Adapt the template using my requirements and attachments. Preserve its main motion and style by default, and deliver HTML and MP4.\nMy requirements:\n');
+    assert.equal(f.messages[0].content[0].text, 'Instructions: Use the OpenMotion plugin. If it is not installed, follow https://github.com/nexu-io/openmotion to install and connect it, then continue.\nSelected template: Decision Tree (decision-tree)\nCreative brief: Adapt the template using my requirements and attachments. Preserve the template\'s original scenes, UI, and animation structure (replace copy and media in place for editable templates) instead of rebuilding a simple text-card layout; explain trade-offs first if user content must be dropped. Deliver HTML and MP4.\nMy requirements:\n');
     assert.equal(f.messages[0].content[0].text.includes('OPENMOTION_TEMPLATE_SELECTION'), false);
     f.ui.update(result([0, 1, 2], '33333333-3333-4333-8333-333333333333'));
     finish({}); await flush();

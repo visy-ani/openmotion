@@ -15,11 +15,12 @@ import { SettingsDialog } from "./settingsPrimitives";
 import { brandCard, brandFile, brandKitInstruction, brandKitShowcase, brandStage, isBrandKitBusy, type BrandKit, type BrandStyle } from "./brandKitClient";
 import { templateRatio } from "./templateDiscovery";
 
-export const BrandKitDetail = memo(function BrandKitDetail({ kit, busy, onAction, onCopy, onDownload, onClose, onNavigate, position, total, refreshFailed, onRefresh, returnFocus, previewsEnabled = true }: {
+export const BrandKitDetail = memo(function BrandKitDetail({ kit, busy, onAction, onCopy, onRunInSuperAgent, onDownload, onClose, onNavigate, position, total, refreshFailed, onRefresh, returnFocus, previewsEnabled = true }: {
   kit: BrandKit;
   busy: boolean;
   onAction: (action: "cancel" | "retry" | "delete" | "edit" | "context" | "rescan", body?: unknown, expectedUpdatedAt?: string) => Promise<BrandKit | undefined>;
   onCopy: () => void;
+  onRunInSuperAgent?: () => void;
   onDownload: () => void;
   onClose: () => void;
   onNavigate: (direction: number) => void;
@@ -80,6 +81,7 @@ export const BrandKitDetail = memo(function BrandKitDetail({ kit, busy, onAction
                 </div> : !ready ? <div className="om-card om-card-stack" role="status"><h2 className="om-subtitle">{t(brandStage[kit.state])}</h2><p className="om-muted">{t(kit.error || "You can retry this website at any time.")}</p><Button variant="ghost" className="om-button h-auto" disabled={busy} onClick={() => void onAction("retry").catch(() => {})}>{t("Retry extraction")}</Button></div> : null}
                 <div className="om-media-detail-actions">
                   <Button variant="ghost" className="om-button h-auto" data-primary disabled={busy || !ready} onClick={onCopy}><RemixIcon name="file-copy-line" size={16} />{t("Copy for Agent")}</Button>
+                  {onRunInSuperAgent && <Button variant="ghost" className="om-button h-auto" disabled={busy || !ready} onClick={onRunInSuperAgent}><RemixIcon name="sparkling-line" size={16} />{t("Run in Super Agent")}</Button>}
                   <Button variant="ghost" className="om-button h-auto" disabled={busy || !ready} onClick={onDownload}><RemixIcon name="download-2-line" size={16} />{t("Download package")}</Button>
                 </div>
                 {ready && <>

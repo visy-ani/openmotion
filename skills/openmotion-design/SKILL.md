@@ -30,7 +30,7 @@ For editable motion films and timeline graphics (`motion-design`, `hyperframes`)
 1. **Discover resources:** call `openmotion_design_catalog` (`list_scenarios`, `list_templates`, `list_design_systems`, `list_skills`, `get_craft`) to load the scenario guide, starter template or design system (`DESIGN.md` and `tokens.css`). See [design systems](references/systems.md).
 2. **Create or inspect the project:** call `openmotion_design_project` (`action="create"` with `scenario`, optional `templateId` / `designSystemId` and stable `requestId`; or `action="get"` for an existing `projectId` to read its `revision` and file list).
 3. **Read before editing:** read existing files with `openmotion_design_edit` (`action="read_file"`, paging with `offset` when `nextOffset` is non-null).
-4. **Write atomically with revision protection:** save complete files via `openmotion_design_edit` (`action="write"`, passing `expectedRevision`, `requestId`, `files` and a short `summary`). Every write creates an immutable `vN` version snapshot.
+4. **Write atomically with revision protection:** save complete files via `openmotion_design_edit` (`action="write"`, passing `expectedRevision`, `requestId`, `files` and a short `summary`). Every write creates an immutable `vN` version snapshot. To embed a pinned image from the OpenMotion asset library, call `openmotion_design_edit` (`action="import_asset"`, passing `assetId`, `versionId`, `expectedRevision` and `requestId`) to copy the binary into `assets/` and reference the returned project-relative path in HTML.
 5. **Present in Design Studio:** call `openmotion_design_project` (`action="open"`) and share the returned `editorUrl` / `previewUrl` so the user can review and annotate.
 
 ## Reference guides

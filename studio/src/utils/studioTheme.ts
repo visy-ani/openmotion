@@ -8,6 +8,7 @@ import {
   type StudioTheme,
   type StudioThemePreference,
 } from "./studioUiPreferences";
+import { syncDesktopTheme } from "./platformHost";
 
 export function savedStudioTheme(): StudioTheme {
   const preference = savedStudioThemePreference();
@@ -31,6 +32,7 @@ function applyStudioTheme(theme: StudioTheme): void {
   const chromeColor = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   const value = chromeColor?.dataset[theme];
   if (chromeColor && value) chromeColor.content = value;
+  syncDesktopTheme(theme);
 }
 
 export function studioUsesHostTheme(): boolean {

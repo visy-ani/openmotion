@@ -3,7 +3,23 @@ import type { TemplateCollection } from './workspacePageRouting';
 import { createContext, useContext, type ReactNode } from 'react';
 import type { useWorkspace } from './useWorkspace';
 import type { GalleryTemplate } from '../../../shared/catalog';
+import type { SuperAgentHandoffPayload } from '../../../shared/capability-hub';
 import type { McpEntry } from './pageTracking';
+
+export type WorkspaceSurfaceKey =
+  | 'explore'
+  | 'agent'
+  | 'design'
+  | 'motion'
+  | 'cinema'
+  | 'creative'
+  | 'scenarios'
+  | 'assets'
+  | 'skills'
+  | 'brand-kit'
+  | 'mcp'
+  | 'settings'
+  | 'game';
 
 export type WorkspaceChrome = {
   workspace: ReturnType<typeof useWorkspace>;
@@ -18,6 +34,8 @@ export type WorkspaceChrome = {
   openSubscriptionSettings?: () => void;
   openHome: () => void;
   openAssets: () => void;
+  openInSuperAgent?: (payload: SuperAgentHandoffPayload) => void;
+  preloadSurface?: (surface: WorkspaceSurfaceKey) => void;
   assetsOpen: boolean;
   openSkills: (category?: SkillCategory | null, trigger?: HTMLElement) => void;
   skillsOpen: boolean;

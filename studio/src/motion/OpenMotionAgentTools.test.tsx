@@ -41,7 +41,7 @@ it('native registration coexists with the five Studio observation/navigation too
   const studio = buildStudioTools({ current: {} as StudioAgentToolsDeps });
   expect((await registerStudioTools(native, studio, studioController.signal)).failed).toEqual([]);
   await act(async () => root.render(<StrictMode><OpenMotionAgentTools /></StrictMode>));
-  expect([...native.registered.keys()].sort()).toEqual([...studio, ...phase1Tools].map(tool => tool.name).sort());
+  expect([...native.registered.keys()].sort()).toEqual([...studio, ...phase1Tools.filter(tool => !tool.name.startsWith('openmotion_game_'))].map(tool => tool.name).sort());
   expect(native.registered.size).toBe(27);
   expect([...native.registered.keys()]).not.toContain('openmotion_studio_set_text');
   expect(loadPolyfill).not.toHaveBeenCalled();

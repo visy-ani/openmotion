@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { GalleryTemplate } from '../../../shared/catalog';
 import { blackFridaySkillIds, blackFridayStages, type BlackFridayStageId } from '../../../shared/black-friday-collection';
 import { useI18n } from '../i18n/I18n';
+import { RemixIcon } from '../icons/RemixIcons';
 import { BackToExploreButton } from './BackToExploreButton';
 import { BlackFridaySkillCarousel } from './BlackFridaySkillCarousel';
 import { motionSkills } from './skillCatalog';
@@ -12,7 +13,7 @@ import styles from './BlackFridayCollection.module.css';
 export type BlackFridayFilter = BlackFridayStageId | null;
 const featuredSkills = blackFridaySkillIds.flatMap(id => motionSkills.filter(skill => skill.id === id));
 
-export function BlackFridayCollection({ templates, featuredPreviewsEnabled, selectedFilter, onFilterChange, searchField, emptyResults, active, onBack, onPreview, onPriority, onOpenSkill }: {
+export function BlackFridayCollection({ templates, featuredPreviewsEnabled, selectedFilter, onFilterChange, searchField, emptyResults, active, onBack, onPreview, onPriority, onOpenSkill, onStartScenario }: {
   templates: readonly GalleryTemplate[];
   featuredPreviewsEnabled: boolean;
   selectedFilter: BlackFridayFilter;
@@ -24,6 +25,7 @@ export function BlackFridayCollection({ templates, featuredPreviewsEnabled, sele
   onPreview: (template: GalleryTemplate, trigger: HTMLButtonElement) => void;
   onPriority: (id: string | null) => void;
   onOpenSkill?: (id: string, trigger: HTMLButtonElement) => void;
+  onStartScenario?: () => void;
 }) {
   const { t } = useI18n();
   const prefix = useId();
@@ -56,6 +58,11 @@ export function BlackFridayCollection({ templates, featuredPreviewsEnabled, sele
       <div className={styles.bannerCopy}>
         <h1 id={prefix + 'title'} ref={title} tabIndex={-1}>{t('Black Friday')}</h1>
         <p>{t('Find a reference from the first teaser to the last call.')}</p>
+        {onStartScenario && (
+          <Button variant="ghost" type="button" className="om-button h-auto" data-primary="media" onClick={onStartScenario}>
+            {t('Start Black Friday workflow')}<RemixIcon name="arrow-right-line" size={16} />
+          </Button>
+        )}
       </div>
     </header>
     <div className={styles.collectionBody}>

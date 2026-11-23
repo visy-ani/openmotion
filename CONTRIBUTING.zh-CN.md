@@ -13,6 +13,8 @@
 | Motion 组件 | `library/components/<name>/` | 源码或明确标注的配方、时序、输入、可修改项与审阅说明。 |
 | 动效设计体系 | `library/design-systems/<name>/MOTION_DESIGN.md` | 视觉语言、节奏、运动、声音、参考与审阅标准。 |
 | Brandkit | `library/brandkits/<name>/BRANDKIT.md` | 确认的事实、文案、身份、素材路径与权限说明。 |
+| Studio 页面与路由 | [studio/src/router/](docs/routing.md) | 在 `shared/spa-routes.ts`、`createAppRouter.tsx` 与 `routeRegistry.ts` 同步登记语义化路径路由，在 `lazyPages.ts` 懒加载注册、避开保留后端前缀、保持根相对路径并通过 `npm run check` 与 `shellBoundary.test.ts`。 |
+| Studio 文案与多语言（i18n） | [studio/src/i18n/](docs/i18n.md) | 按模块维护 JSON 并在 `manifest.ts` 注册、补齐 10 语种与 `{var}` 占位符一致性、禁止在运行时静态导入语言 JSON，并通过 `npm run check`。 |
 | 运行时 / 编辑器 / Agent 接入 | [架构文档](docs/product/architecture.md)对应模块 | 可复现问题、聚焦的修改与对应边界的检查。 |
 
 按[条目清单](library/ENTRY_TEMPLATE.md)填写并加入分类索引，保留来源与许可。区分参考、配方与可编辑示例。新增文件夹不会自动注册到 Studio、MCP 工作流或默认五个 Skills；分发仍使用明确的文件清单。

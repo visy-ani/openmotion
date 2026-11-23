@@ -215,11 +215,11 @@ it('reports version history results through the editor channel only when the hos
 });
 
 it('propagates validated entry_from onto settings page views and account clicks while dropping unknown values', () => {
-  vi.stubGlobal('location', new URL('http://localhost/?page=settings&section=providers&entry_from=agent_media_upgrade_free&embed=1'));
+  vi.stubGlobal('location', new URL('http://localhost/settings/providers?entry_from=agent_media_upgrade_free&embed=1'));
   tracking.reportSettingsPageView('providers', false);
   tracking.reportSettingsClick('account', 'sign_in');
   tracking.reportSettingsClick('account', 'manage_subscription');
-  vi.stubGlobal('location', new URL('http://localhost/?page=settings&section=providers&entry_from=PRIVATE_TEXT'));
+  vi.stubGlobal('location', new URL('http://localhost/settings/providers?entry_from=PRIVATE_TEXT'));
   tracking.reportSettingsPageView('providers', false);
   tracking.reportSettingsClick('account', 'sign_in');
   expect(of('page_view')[0].properties.entry_from).toBe('agent_media_upgrade_free');

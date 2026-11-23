@@ -1,13 +1,14 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
 import type { ArtifactKind, SessionArtifact } from '../../../shared/session';
 import { EditorLoading, type EditorLoadingLayout } from './EditorLoading';
 import { usePlayerStore } from '../player/store/playerStore';
 import { useOptionalWorkspaceChrome } from './WorkspaceFrame';
+import { lazyWithChunkReload } from '../utils/chunkReload';
 
 // Add a viewer adapter here when a mode introduces a new artifact kind.
 // The session and browser shell do not own the editor's internal state.
 const viewers: Record<ArtifactKind, ComponentType<{ resolvedProjectId: string }>> = {
-  'motion-project': lazy(() => import('../App').then(module => ({ default: module.StudioApp }))),
+  'motion-project': lazyWithChunkReload(() => import('../App').then(module => ({ default: module.StudioApp }))),
 };
 export function ArtifactViewer({ artifact, loadingLayout }: { artifact: SessionArtifact; loadingLayout?: EditorLoadingLayout | null }) {
   const Viewer = viewers[artifact.kind];

@@ -31,6 +31,7 @@
 :root[data-motion-ui] :focus-visible { outline: 1px solid var(--motion-focus); outline-offset: 1px; }
 :root[data-motion-ui] [data-panel-search-input]:focus-visible { outline: none; }
 :root[data-motion-ui] .hf-od-field:focus-within { outline: none; }
+:root[data-motion-ui] .hf-od-field:focus-visible { outline: none; }
 :root[data-motion-ui] .hf-od-field:is(:focus-visible, :has(:focus-visible)) {
   border-color: var(--motion-focus);
   background: var(--motion-inset);

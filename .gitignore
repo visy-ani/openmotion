@@ -128,3 +128,13 @@ web/inline-video.html
 /mcp-ui/template-recommendations/build/
 
 /docs/readme/maintainer-media-merge-smoke.webm
+
+# Desktop Electron build & packaging outputs
+desktop/dist/
+desktop/release/
+desktop/resources/app-server/
+desktop/node_modules/
+desktop/build/icon.png
+desktop/build/icon.svg
+desktop/build/icon.icns
+desktop/build/icon.ico

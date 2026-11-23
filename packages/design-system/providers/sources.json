@@ -305,6 +305,58 @@
     "models/google-color.svg": {
       "source": "readmeModelMarks",
       "path": "docs/readme/models/veo.svg"
+    },
+    "amp-color.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/amp-color.svg"
+    },
+    "antigravity-color.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/antigravity-color.svg"
+    },
+    "cline.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/cline.svg"
+    },
+    "codebuddy-color.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/codebuddy-color.svg"
+    },
+    "cursor.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/cursor.svg"
+    },
+    "devin-color.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/devin-color.svg"
+    },
+    "hermesagent.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/hermesagent.svg"
+    },
+    "kilocode.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/kilocode.svg"
+    },
+    "kimi-color.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/kimi-color.svg"
+    },
+    "kiro-color.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/kiro-color.svg"
+    },
+    "pi-text.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/pi-text.svg"
+    },
+    "qoder-color.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/qoder-color.svg"
+    },
+    "trae-color.svg": {
+      "source": "lobe",
+      "path": "packages/static-svg/icons/trae-color.svg"
     }
   },
   "readmeModelMarks": {

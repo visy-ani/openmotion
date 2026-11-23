@@ -75,7 +75,8 @@ describe('WebMCP registration and invocation tracking', () => {
     const original = [...buildOpenMotionWebMcpTools(vi.fn()), ...buildStudioTools({ current: {} as never })];
     expect([...webMcpToolNames].sort()).toEqual(original.map(tool => tool.name).sort());
     expect(webMcpToolNames).toHaveLength(27);
-    expect(original.slice(0, phase1Tools.length).map(tool => tool.inputSchema)).toEqual(phase1Tools.map(tool => tool.inputSchema));
+    const exposed = phase1Tools.filter(tool => !tool.name.startsWith('openmotion_game_'));
+    expect(original.slice(0, exposed.length).map(tool => tool.inputSchema)).toEqual(exposed.map(tool => tool.inputSchema));
     const reply = { ok: true, privateResult: 'PRIVATE_CONTENT' };
     const handlers = original.map(() => vi.fn(async () => reply));
     const tools = original.map((tool, i) => ({ ...tool, execute: handlers[i] }));

@@ -6,7 +6,16 @@ import React, { act, useState } from "react";
 import { compile } from "tailwindcss";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadStylesheet, STYLES_DIR } from "../../styles/styleSources";
-import { ContextMenu, Menu, MenuItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "./Menu";
+import {
+  ContextMenu,
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+} from "./Menu";
 import { Popover } from "./Popover";
 import { isTypingTarget } from "../../utils/typingTarget";
 import { shouldIgnorePlaybackShortcutTarget } from "../../player/lib/playbackShortcuts";
@@ -191,6 +200,31 @@ describe("Menu behaviour", () => {
 
     expect(sawBubblePress).toBe(false);
     await vi.waitFor(() => expect(popup()).toBeNull());
+  });
+
+  it("left-aligns icon and label inside MenuItem and renders MenuGroup with MenuGroupLabel", async () => {
+    render(
+      <Menu trigger={<button data-testid="trigger">Drafts</button>} aria-label="Switch draft">
+        <MenuGroup>
+          <MenuGroupLabel>Saved drafts</MenuGroupLabel>
+          <MenuItem icon={<span data-testid="row-icon" />} shortcut="Nov 21">
+            Motion Studio
+          </MenuItem>
+        </MenuGroup>
+      </Menu>,
+    );
+    clickWithMouse(trigger());
+    await settle();
+
+    const group = one<HTMLElement>('[role="group"]', "menu group");
+    expect(group.textContent).toContain("Saved drafts");
+
+    const row = items()[0];
+    expect(row.className).toContain("justify-start");
+    expect(row.className).toContain("gap-2");
+    const label = row.querySelector<HTMLElement>(".truncate")!;
+    expect(label.className).toContain("flex-1");
+    expect(row.querySelector('[data-testid="row-icon"]')).not.toBeNull();
   });
 });
 

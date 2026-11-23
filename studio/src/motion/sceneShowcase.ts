@@ -36,7 +36,7 @@ const narration = archivedSkillPoster('talking-head-recreation');
 const camera = archivedSkillPoster('babylon-js');
 
 /** Audio templates name the model to reproduce them with; the bundled files are the repository's own scores and effects, not output from that model. */
-export interface SceneExample { title: string; prompt: string; poster: string; posterPosition?: string; credit?: string; creditUrl?: string; clip?: string; audio?: string; waveform?: readonly number[]; seconds?: number; model?: string; kind?: 'Music' | 'Sound effect' }
+export interface SceneExample { title: string; prompt: string; poster: string; posterAspect?: number; posterPosition?: string; credit?: string; creditUrl?: string; clip?: string; audio?: string; waveform?: readonly number[]; seconds?: number; model?: string; kind?: 'Music' | 'Sound effect' }
 
 // Normalized RMS amplitudes sampled across the bundled welcome soundtrack.
 const welcomeWaveform = [
@@ -57,23 +57,21 @@ const flightWaveform = [2, 2, 30, 58, 74, 76, 74, 72, 69, 63, 56, 51, 39, 28, 48
 const splashClip = motionSkills.find(skill => skill.id === 'openmotion-splash-float-product')?.cover?.video;
 const productClip = motionSkills.find(skill => skill.id === 'openmotion-light-shadow-product')?.cover?.video;
 
-const portrait = { title: 'Product portrait', prompt: 'Photograph an amber glass bottle in warm sidelight, with soft leaf shadows on stone.', poster: product, clip: productClip };
-const cameraStudy = { title: 'Vintage camera study', prompt: 'Frame a vintage camera in soft sidelight. Let the background fall into shadow.', poster: camera };
-const moon = { title: 'Lunar portrait', prompt: 'Frame a lone astronaut on a silver lunar plain. Use a low horizon, deep shadows and light reflected in the visor.', poster: lunar, posterPosition: 'center top', credit: 'NASA · AS11-40-5903' };
-const orange = { title: 'Slow motion detail', prompt: 'Film a slow-motion close-up of an orange soda bottle with citrus slices, mint and splashing water.', poster: splash, clip: splashClip };
+const portrait = { title: 'Product portrait', prompt: 'Photograph an amber glass bottle in warm sidelight, with soft leaf shadows on stone.', poster: product, posterAspect: 16 / 9, clip: productClip };
+const cameraStudy = { title: 'Vintage camera study', prompt: 'Frame a vintage camera in soft sidelight. Let the background fall into shadow.', poster: camera, posterAspect: 16 / 9 };
+const moon = { title: 'Lunar portrait', prompt: 'Frame a lone astronaut on a silver lunar plain. Use a low horizon, deep shadows and light reflected in the visor.', poster: lunar, posterAspect: 1024 / 999, posterPosition: 'center top', credit: 'NASA · AS11-40-5903' };
+const orange = { title: 'Slow motion detail', prompt: 'Film a slow-motion close-up of an orange soda bottle with citrus slices, mint and splashing water.', poster: splash, posterAspect: 16 / 9, clip: splashClip };
 
 export const sceneExamples: Record<StudioScene['id'], readonly [SceneExample, ...SceneExample[]]> = {
   'text-to-image': [portrait, moon, cameraStudy],
-  'image-edit': [{ title: 'From studio to living room', prompt: 'Keep the speaker in place. Put it on a wooden side table in a sunlit living room.', poster: speakerRoom }],
-  'remove-background': [{ title: 'A clean product cutout', prompt: 'Keep only the speaker.', poster: speakerStudio }],
-  relight: [{ title: 'Late afternoon light', prompt: 'Let the light fall across the table and leave soft shadows behind the speaker.', poster: speakerRoom }],
-  character: [{ title: 'The same astronaut, a new place', prompt: 'Show the same astronaut walking through a neon-lit city street at night.', poster: lunar, posterPosition: 'center top', credit: 'NASA · AS11-40-5903' }],
-  'shot-image': [moon, cameraStudy, portrait],
+  'image-edit': [{ title: 'From studio to living room', prompt: 'Keep the speaker in place. Put it on a wooden side table in a sunlit living room.', poster: speakerRoom, posterAspect: 800 / 500 }],
+  'remove-background': [{ title: 'A clean product cutout', prompt: 'Keep only the speaker.', poster: speakerStudio, posterAspect: 800 / 500 }],
+  relight: [{ title: 'Late afternoon light', prompt: 'Let the light fall across the table and leave soft shadows behind the speaker.', poster: speakerRoom, posterAspect: 800 / 500 }],
+  character: [{ title: 'The same astronaut, a new place', prompt: 'Show the same astronaut walking through a neon-lit city street at night.', poster: lunar, posterAspect: 1024 / 999, posterPosition: 'center top', credit: 'NASA · AS11-40-5903' }],
   'text-to-video': [orange],
-  'image-to-video': [{ title: 'A cinematic opening', prompt: 'Start on the supplied frame. Push in slowly as a band of sunlight moves across the product.', poster: product, clip: productClip }],
-  'video-camera-control': [{ title: 'Orbital hero shot', prompt: 'Slow cinematic 360-degree camera orbit around a vintage camera on dark stone with dramatic rim lighting.', poster: camera }],
-  'video-multi-shot': [{ title: 'Three-shot lunar story', prompt: 'Wide establishing shot of an astronaut on a silver lunar ridge, cutting to a medium tracking shot of boots in dust, ending on a close-up of Earth reflected in the visor.', poster: lunar, posterPosition: 'center top', credit: 'NASA · AS11-40-5903' }],
-  'video-native-audio': [{ title: 'Rainy street ambience', prompt: 'Neon-lit Tokyo alley at night in steady rain, realistic raindrops hitting umbrellas, distant traffic hum and crisp footsteps on wet pavement.', poster: splash, clip: splashClip }],
+  'image-to-video': [{ title: 'A cinematic opening', prompt: 'Start on the supplied frame. Push in slowly as a band of sunlight moves across the product.', poster: product, posterAspect: 16 / 9, clip: productClip }],
+  'video-camera-control': [{ title: 'Orbital hero shot', prompt: 'Slow cinematic 360-degree camera orbit around a vintage camera on dark stone with dramatic rim lighting.', poster: camera, posterAspect: 16 / 9 }],
+  'video-multi-shot': [{ title: 'Three-shot lunar story', prompt: 'Wide establishing shot of an astronaut on a silver lunar ridge, cutting to a medium tracking shot of boots in dust, ending on a close-up of Earth reflected in the visor.', poster: lunar, posterAspect: 1024 / 999, posterPosition: 'center top', credit: 'NASA · AS11-40-5903' }],
   music: [
     { title: 'Ambient soundtrack', kind: 'Music', prompt: 'Compose a quiet instrumental with soft piano and airy synths for a sunrise scene.', poster: soundtrackCover, audio: welcomeMusic, waveform: welcomeWaveform, seconds: 37, model: 'ElevenLabs Music' },
     { title: 'Minimal product score', kind: 'Music', prompt: 'Compose a calm, minimal instrumental at about 60 BPM. Let single bell-like notes ring out and fade, with space between phrases for a product film.', poster: studiesCover, audio: studiesScore, waveform: studiesWaveform, seconds: 32, model: 'ElevenLabs Music' },
@@ -96,7 +94,7 @@ export function studioExamples({ studio, scene }: StudioDestination): readonly S
   if (studio.surface === 'techniques' && scene.id === 'text-to-video') {
     const skill = motionSkills.find(item => item.id === studio.techniques[0]);
     if (skill?.cover?.poster) return [{
-      title: skill.title, poster: skill.cover.poster, clip: skill.cover.video, credit: skill.repository ? skill.name : undefined,
+      title: skill.title, poster: skill.cover.poster, posterAspect: skill.cover.aspect ?? 16 / 9, clip: skill.cover.video, credit: skill.repository ? skill.name : undefined,
       prompt: studio.id === 'shorts' ? 'Frame a podcast host vertically as she leans into the microphone to deliver her opening line.' : skill.example,
     }];
   }

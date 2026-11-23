@@ -16,6 +16,7 @@
   --motion-black-friday-cream: #ffd9bd;
   --motion-black-friday-ink-light: #ffffff;
   --motion-header-pill-hover-bg: #28282b;
+  --motion-provider-setup-icon: #FF8D02;
   --motion-media-action-bg: color-mix(in srgb, var(--motion-neutral-n11) 95%, transparent);
   --motion-tooltip-bg: var(--motion-neutral-n11);
   --motion-tooltip-fg: var(--motion-neutral-n0);
@@ -133,6 +134,7 @@
   --motion-brand: #00ff08;
   --motion-bg: #ffffff;
   --motion-inset: #ededed;
+  --motion-image-form-fill: var(--motion-neutral-n2);
   --motion-panel: #fafafa;
   --motion-raised: #ffffff;
   --motion-hover: #ededed;
@@ -235,6 +237,7 @@
   --motion-brand: #00ff08;
   --motion-bg: #191a1b;
   --motion-inset: #111213;
+  --motion-image-form-fill: var(--motion-panel);
   --motion-panel: #202123;
   --motion-raised: #292b2c;
   --motion-hover: #36383a;
@@ -338,6 +341,7 @@
     --motion-brand: #00ff08;
     --motion-bg: #191a1b;
     --motion-inset: #111213;
+    --motion-image-form-fill: var(--motion-panel);
     --motion-panel: #202123;
     --motion-raised: #292b2c;
     --motion-hover: #36383a;

@@ -14,6 +14,8 @@ Designers, creators, prompt authors and engineers are all welcome. The [OpenMoti
 | A motion design system | `library/design-systems/<name>/MOTION_DESIGN.md` | Visual language, pacing, movement, sound, references and review criteria. |
 | A Brandkit | `library/brandkits/<name>/BRANDKIT.md` | Confirmed facts, copy, identity, asset locations and permission notes. |
 | A Studio UI component | [packages/open-design-ui](packages/open-design-ui/README.md) | States, semantic tokens, an interactive example and a product usage. |
+| A Studio page or route | [studio/src/router/](docs/routing.md) | Semantic path route in `shared/spa-routes.ts`, `createAppRouter.tsx`, and `routeRegistry.ts`, lazy registration in `lazyPages.ts`, root-relative paths, no reserved backend prefixes, and passing `npm run check` + `shellBoundary.test.ts`. |
+| Studio UI copy / i18n | [studio/src/i18n/](docs/i18n.md) | Module JSON registered in `manifest.ts`, all 10 non-English locales, `{var}` placeholder parity, no static locale JSON imports, and `npm run check`. |
 | Runtime / editor / agent support | Existing modules linked in the [architecture](docs/product/architecture.md) | A reproducible case, focused change and checks for the affected boundary. |
 
 Use the [entry checklist](library/ENTRY_TEMPLATE.md), link the new entry from its collection, and preserve sources and licenses. Label references, recipes and editable examples accurately. Adding a folder does not register it in Studio, the MCP workflow registry or the default five-Skill installation. Packaging uses an explicit file list.
@@ -36,7 +38,7 @@ attribution with the source.
 
 The distribution job reports the actual compressed default npm package and the
 largest file and directory changes. Growth of 1 MiB raises a warning. The default
-package has a 24 MiB budget. If a feature needs new offline media, list its
+package has a 26 MiB budget. If a feature needs new offline media, list its
 runtime purpose beside its path in `scripts/distribution.ts` and review any
 necessary budget change in the same PR.
 

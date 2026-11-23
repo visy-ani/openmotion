@@ -545,7 +545,6 @@ export function useRenderQueue(
       promptedJobIds.current.add(job.id);
       requestStudioFeedback({
         reason: job.status === "complete" ? "render_complete" : "render_failed",
-        renderId: job.id,
         detail: job.error,
         context: {
           ...settings,

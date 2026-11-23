@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { pipeline } from 'node:stream/promises';
 import type { WorkspaceStore } from '../workspace.ts';
 import { projectArchive } from '../project-archive.ts';
+import { attachmentDisposition } from '../shared/http-header.ts';
 import { jsonFile } from '../phase1-versions.ts';
 import { PROJECT_ARCHIVE_LIMITS } from '../shared/project-archive.ts';
 
@@ -44,7 +45,7 @@ export async function projectArchiveHttp(req: IncomingMessage, res: ServerRespon
     if (!info.isFile()) throw new Error('PROJECT_ARCHIVE_UNAVAILABLE');
     const metadata = await jsonFile<{ filename: string }>(path.join(root, 'files', match[1] + '.json'), { filename: 'OpenMotion-projects.zip' });
     res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': info.size,
-      'Content-Disposition': `attachment; filename="OpenMotion-projects.zip"; filename*=UTF-8''${encodeURIComponent(metadata.filename)}`,
+      'Content-Disposition': attachmentDisposition(metadata.filename, 'OpenMotion-projects.zip'),
       'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
     if (req.method === 'HEAD') res.end();
     else await pipeline(file.createReadStream({ autoClose: false }), res);

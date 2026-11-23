@@ -48,9 +48,15 @@ export function PricingEntry({ trackingPage }: { trackingPage: CreativePage }) {
         />
       </svg>
       <span className={styles.label}>Pricing</span>
-      {campaign && <span className={styles.badge} aria-hidden="true">
-        <span className={styles.badgeText}>50% OFF</span>
-      </span>}
+      {campaign ? (
+        <span className={styles.badge} aria-hidden="true">
+          <span className={styles.badgeText}>50% OFF</span>
+        </span>
+      ) : (
+        <span className={styles.cornerBadge} aria-hidden="true">
+          <span className={styles.cornerBadgeText}>{t('Free credits')}</span>
+        </span>
+      )}
     </a>
   );
 }

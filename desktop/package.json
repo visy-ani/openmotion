@@ -1,0 +1,33 @@
+{
+  "name": "@openmotion/desktop",
+  "private": true,
+  "version": "0.2.1",
+  "description": "OpenMotion cross-platform Electron desktop shell for macOS, Windows, and Linux.",
+  "type": "module",
+  "main": "dist/main.mjs",
+  "author": "OpenMotion Contributors",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "icons": "node scripts/build-icons.mjs",
+    "build": "node scripts/build.mjs",
+    "stage": "node scripts/stage-app.mjs",
+    "test": "node --experimental-strip-types --test tests/desktop.test.mjs",
+    "dev": "electron .",
+    "pack:dir": "npm run build && npm run stage && electron-builder --dir",
+    "pack:mac": "npm run build && npm run stage && electron-builder --mac",
+    "pack:mac:local": "npm run build && npm run stage && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64",
+    "pack:win": "npm run build && npm run stage && electron-builder --win",
+    "pack:linux": "npm run build && npm run stage && electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
+  },
+  "devDependencies": {
+    "electron": "35.2.0",
+    "electron-builder": "26.0.12"
+  }
+}

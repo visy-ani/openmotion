@@ -16,6 +16,7 @@ import { ResizablePane } from '../motion/ResizablePane';
 import { ReviewAnnotationGraphic } from '../motion/ReviewAnnotationGraphic';
 import { useIntegrationInfo } from '../motion/useIntegrationInfo';
 import { CodeViewer } from './CodeViewer';
+import { DesignDeployPopover } from './DesignDeployPopover';
 import { DesignApiError, designClient, makeRequestId } from './designClient';
 import { buildBridgeSrcDoc, looksLikeDeck, parseDeckSlides, parseSpeakerNotes, type PickedElement } from './previewBridge';
 import { useDesignProject } from './useDesignProject';
@@ -642,6 +643,23 @@ export function DesignProjectEditor({
               </Popover.Positioner>
             </Popover.Portal>
           </Popover.Root>
+
+          {/* Share live deploy popover */}
+          <DesignDeployPopover
+            projectId={project.id}
+            filePath={isHtmlActive ? activeFile : project.entry}
+            title={project.title}
+            revisionKey={project.revision}
+            onNotify={(message, variant = 'info') => showToast(message, variant, 'feedback')}
+            onCopyUrl={async url => {
+              try {
+                await navigator.clipboard.writeText(url);
+                showToast(t('Share link copied'), 'info', 'feedback');
+              } catch {
+                showToast(t('Could not copy. Select and copy the text manually.'), 'error', 'feedback');
+              }
+            }}
+          />
 
           {/* Export menu */}
           <Popover.Root modal={false} open={exportOpen} onOpenChange={setExportOpen}>

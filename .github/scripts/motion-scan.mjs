@@ -27,8 +27,15 @@ export async function installScanner(directory) {
   return binary;
 }
 
+// tar terminates its listings with LF on Linux and CRLF on Windows, so every line is normalised
+// before the safety rules run; a stray \r must not read as a forbidden control character.
+// tar terminates its listing with CRLF on Windows, so a trailing CR is removed per line before the
+// safety rules run. Only the terminator is stripped: a CR inside an entry name is still a control
+// character, and the assertions below have to reject it.
+const listingLines = listing => listing.trim().split('\n').map(line => line.endsWith('\r') ? line.slice(0, -1) : line);
+
 export function archivePaths(listing) {
-  const names = listing.trim().split('\n');
+  const names = listingLines(listing);
   assert(names.length && names.length < 20_000, 'Archive has too many entries');
   for (const name of names) {
     assert(name && !/[\\\x00-\x1f]/.test(name) && !path.posix.isAbsolute(name) && !/^[a-z]:/i.test(name)
@@ -44,7 +51,7 @@ export async function unpackChecked(archive, directory, run = runFile) {
     expanded += chunk.length; assert(expanded < 350 * 1024 * 1024, 'Expanded archive exceeds release size limit');
   }
   archivePaths(await run('tar', ['-tzf', archive]));
-  const details = (await run('tar', ['-tvzf', archive])).trim().split('\n');
+  const details = listingLines(await run('tar', ['-tvzf', archive]));
   assert(details.every(line => /^[-d]/.test(line)), 'Archive links and special files are forbidden');
   await mkdir(directory, { recursive: true });
   await run('tar', ['-xzf', archive, '-C', directory]);

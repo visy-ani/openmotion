@@ -14,6 +14,10 @@ vi.mock('../i18n/I18n', () => ({ useI18n: () => ({ t: (text: string, values?: { 
 vi.mock('./ResizablePane', () => ({ ResizablePane: ({ children }: { children: ReactNode }) => <div>{children}</div> }));
 vi.mock('./assetClient', () => ({ assetRequest: vi.fn(), uploadLibraryAsset: vi.fn() }));
 vi.mock('./gatewayClient', () => ({ gatewayRequest: vi.fn() }));
+vi.mock('./game/gameCatalog', async importOriginal => {
+  const actual = await importOriginal<typeof import('./game/gameCatalog')>();
+  return { ...actual, gameApi: { ...actual.gameApi, catalog: async () => ({ games: [] }) } };
+});
 vi.mock('./AssetComposer', () => ({ AssetComposer: (props: ComponentProps<typeof AssetComposer>) => {
   composer = props;
   return <aside data-testid="composer"><span>{props.mode}:{props.taskIds[props.mode]}</span>

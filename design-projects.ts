@@ -15,13 +15,16 @@ import { promisify } from 'node:util';
 import { atomicJson, jsonFile } from './phase1-versions.ts';
 import { withProcessLock } from './shared/process-lock.ts';
 import { readProjectZip } from './shared/project-zip.ts';
+import { attachmentDisposition } from './shared/http-header.ts';
 import { zip } from './scripts/zip.mjs';
 import { browserExecutable } from './browser.ts';
 import { validateReviewAnnotation } from './shared/review-comments.ts';
+import { injectPreviewBridgeHtml, isValidPreviewBridgeToken } from './shared/preview-bridge.ts';
 import { designCatalog } from './shared/design-catalog.ts';
+import { designDeployFor } from './gateway/design-deploy.ts';
 import {
   designEditorHref, designExportFormats, designRoutes, designScenarios, findDesignScenario, isDesignScenario,
-  type DesignComment, type DesignCommentAnchor, type DesignEditorApp, type DesignExportFormat,
+  type DesignComment, type DesignCommentAnchor, type DesignDeployMode, type DesignEditorApp, type DesignExportFormat,
   type DesignFile, type DesignProject, type DesignProjectDetail, type DesignScenarioId, type DesignVersion,
 } from './shared/design-project.ts';
 
@@ -37,7 +40,24 @@ const READ_LIMIT_DEFAULT = 200_000;
 const IGNORED_DIRS = new Set(['node_modules', '.git', '__MACOSX', 'dist', 'build', '.next']);
 
 const TEXT_EXTS = new Set(['html', 'htm', 'css', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'json', 'md', 'markdown', 'txt', 'svg', 'xml', 'csv', 'yaml', 'yml', 'glsl', 'vert', 'frag']);
+const BINARY_IMPORT_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'ico', 'bmp', 'svg', 'woff', 'woff2', 'ttf', 'otf', 'mp3', 'wav', 'ogg', 'mp4', 'webm']);
 const IMPORT_EXTS = new Set([...TEXT_EXTS, 'png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'ico', 'bmp', 'woff', 'woff2', 'ttf', 'otf', 'pdf', 'mp3', 'wav', 'ogg', 'mp4', 'webm', 'wasm', 'map', 'webmanifest']);
+
+export type DesignAssetResolver = (ref: { assetId: string; versionId: string }) => Promise<{
+  asset: { id: string; name: string; modality: string };
+  version: { id: string; filename: string; name?: string; mimeType: string; bytes: number; sha256: string };
+  filename: string;
+}>;
+
+function slugifyAssetName(raw: string): string {
+  const slug = raw
+    .toLowerCase()
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  return slug || 'asset';
+}
 
 const MIME_BY_EXT: Record<string, string> = {
   html: 'text/html; charset=utf-8', htm: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8',
@@ -49,7 +69,15 @@ const MIME_BY_EXT: Record<string, string> = {
   wasm: 'application/wasm', pdf: 'application/pdf', mp3: 'audio/mpeg', wav: 'audio/wav', mp4: 'video/mp4', webm: 'video/webm',
 };
 
-export type DesignErrorCode = 'INVALID_ARGUMENT' | 'NOT_FOUND' | 'VERSION_CONFLICT' | 'COMMENT_CONFLICT' | 'UNSUPPORTED';
+export type DesignErrorCode =
+  | 'INVALID_ARGUMENT'
+  | 'NOT_FOUND'
+  | 'VERSION_CONFLICT'
+  | 'COMMENT_CONFLICT'
+  | 'UNSUPPORTED'
+  | 'AUTH_REQUIRED'
+  | 'DEPLOY_CONFLICT'
+  | 'DEPLOY_FAILED';
 
 export class DesignError extends Error {
   readonly code: DesignErrorCode;
@@ -57,8 +85,36 @@ export class DesignError extends Error {
   constructor(code: DesignErrorCode, message: string, status?: number) {
     super(`${code}: ${message}`);
     this.code = code;
-    this.status = status ?? (code === 'NOT_FOUND' ? 404 : code === 'VERSION_CONFLICT' || code === 'COMMENT_CONFLICT' ? 409 : code === 'UNSUPPORTED' ? 501 : 400);
+    this.status = status ?? (
+      code === 'NOT_FOUND' ? 404
+        : code === 'VERSION_CONFLICT' || code === 'COMMENT_CONFLICT' || code === 'DEPLOY_CONFLICT' ? 409
+          : code === 'AUTH_REQUIRED' ? 401
+            : code === 'UNSUPPORTED' ? 501
+              : code === 'DEPLOY_FAILED' ? 502
+                : 400
+    );
   }
+}
+
+function mapDeployError(error: unknown): never {
+  if (error instanceof DesignError) throw error;
+  const raw = error instanceof Error ? error.message : String(error);
+  if (raw.startsWith('OPENDESIGN_SIGN_IN_REQUIRED')) {
+    throw new DesignError('AUTH_REQUIRED', raw.replace(/^OPENDESIGN_SIGN_IN_REQUIRED:\s*/, ''));
+  }
+  if (raw.startsWith('SHARE_STOPPED_RESUME_REQUIRED')) {
+    throw new DesignError('DEPLOY_CONFLICT', raw.replace(/^SHARE_STOPPED_RESUME_REQUIRED:\s*/, ''));
+  }
+  if (raw.startsWith('NOT_FOUND:')) {
+    throw new DesignError('NOT_FOUND', raw.replace(/^NOT_FOUND:\s*/, ''));
+  }
+  if (raw.startsWith('INVALID_ARGUMENT:')) {
+    throw new DesignError('INVALID_ARGUMENT', raw.replace(/^INVALID_ARGUMENT:\s*/, ''));
+  }
+  if (raw.startsWith('DEPLOY_FAILED:')) {
+    throw new DesignError('DEPLOY_FAILED', raw.replace(/^DEPLOY_FAILED:\s*/, ''));
+  }
+  throw new DesignError('DEPLOY_FAILED', raw || 'Web deployment failed');
 }
 
 type StoredProject = Omit<DesignProject, 'revision' | 'versionId' | 'versionLabel'>;
@@ -959,6 +1015,104 @@ export class DesignProjects {
     }));
   }
 
+  async importBinaryFile(id: string, input: {
+    requestId: string;
+    expectedRevision: string;
+    sourcePath: string;
+    expectedSha256?: string;
+    path?: string;
+    name?: string;
+    versionId?: string;
+    summary?: string;
+    source?: 'agent' | 'manual' | 'import';
+  }, origin = ''): Promise<{ project: DesignProjectDetail; version: DesignVersion; path: string }> {
+    const pid = validateId(id);
+    if (typeof input.sourcePath !== 'string' || !input.sourcePath.trim()) {
+      throw new DesignError('INVALID_ARGUMENT', 'sourcePath is required');
+    }
+    const sourceExt = path.extname(input.sourcePath).slice(1).toLowerCase();
+    if (!BINARY_IMPORT_EXTS.has(sourceExt)) {
+      throw new DesignError('INVALID_ARGUMENT', `Unsupported binary asset extension: .${sourceExt || 'none'}`);
+    }
+    const defaultSlug = slugifyAssetName(input.name ?? path.basename(input.sourcePath, `.${sourceExt}`));
+    const suffix = (input.versionId ?? input.expectedSha256 ?? randomUUID()).slice(0, 8);
+    const safePath = cleanDesignPath(input.path ?? `assets/${defaultSlug}-${suffix}.${sourceExt}`);
+    const targetExt = path.extname(safePath).slice(1).toLowerCase();
+    if (!BINARY_IMPORT_EXTS.has(targetExt)) {
+      throw new DesignError('INVALID_ARGUMENT', `Unsupported destination asset extension: .${targetExt || 'none'}`);
+    }
+
+    let bytes: Buffer;
+    let handle;
+    try {
+      handle = await open(input.sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW | (constants.O_NONBLOCK ?? 0));
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') throw new DesignError('NOT_FOUND', 'Source asset file not found');
+      throw new DesignError('INVALID_ARGUMENT', 'Unable to open source asset file');
+    }
+    try {
+      const info = await handle.stat();
+      if (!info.isFile()) throw new DesignError('INVALID_ARGUMENT', 'Source asset must be a regular file');
+      if (!info.size) throw new DesignError('INVALID_ARGUMENT', 'Source asset file is empty');
+      if (info.size > MAX_IMPORT_FILE_BYTES) {
+        throw new DesignError('INVALID_ARGUMENT', `Binary asset exceeds ${Math.round(MAX_IMPORT_FILE_BYTES / (1024 * 1024))} MB limit`);
+      }
+      const chunks: Buffer[] = [];
+      let total = 0;
+      for await (const chunk of handle.createReadStream({ autoClose: false })) {
+        total += chunk.length;
+        if (total > MAX_IMPORT_FILE_BYTES) {
+          throw new DesignError('INVALID_ARGUMENT', `Binary asset exceeds ${Math.round(MAX_IMPORT_FILE_BYTES / (1024 * 1024))} MB limit`);
+        }
+        chunks.push(chunk);
+      }
+      bytes = Buffer.concat(chunks);
+    } finally {
+      await handle.close();
+    }
+
+    const actualSha = sha256(bytes);
+    if (input.expectedSha256 && actualSha !== input.expectedSha256) {
+      throw new DesignError('INVALID_ARGUMENT', 'Source asset checksum mismatch');
+    }
+
+    return this.lock(() => this.idempotent(
+      `import-asset:${pid}`,
+      input.requestId,
+      { expectedRevision: input.expectedRevision, sha256: actualSha, path: safePath },
+      async () => {
+        const catalog = await this.readCatalog();
+        const stored = catalog.projects.find(p => p.id === pid && !p.trashedAt);
+        if (!stored) throw new DesignError('NOT_FOUND', `Design project ${pid} not found`);
+        const dir = this.projectDir(pid);
+        const currentFiles = await this.scanFiles(dir);
+        const currentRevision = computeRevision(currentFiles);
+        if (input.expectedRevision !== currentRevision) {
+          throw new DesignError('VERSION_CONFLICT', `Expected revision ${input.expectedRevision}, current revision is ${currentRevision}`);
+        }
+        if (!currentFiles.some(f => f.path === safePath) && currentFiles.length >= MAX_FILES) {
+          throw new DesignError('INVALID_ARGUMENT', 'Project exceeds file count limit');
+        }
+        const full = path.join(dir, safePath);
+        await mkdir(path.dirname(full), { recursive: true });
+        const tmp = `${full}.${randomUUID()}.tmp`;
+        await writeFile(tmp, bytes);
+        await rename(tmp, full);
+
+        const nextFiles = await this.scanFiles(dir);
+        stored.updatedAt = Date.now();
+        await this.saveCatalog(catalog);
+        const version = await this.appendVersion(pid, nextFiles, {
+          source: input.source ?? 'manual',
+          summary: input.summary ?? `Imported ${safePath}`,
+          entry: stored.entry,
+        });
+        return { project: await this.hydrate(stored, origin), version, path: safePath };
+      },
+    ));
+  }
+
   async listVersions(id: string, opts: { cursor?: string; limit?: number } = {}): Promise<{ versions: DesignVersion[]; currentVersionId: string | null; nextCursor: string | null }> {
     const pid = validateId(id);
     const catalog = await this.readCatalog();
@@ -1461,7 +1615,7 @@ async function readMultipartZip(req: IncomingMessage, maxBytes = MAX_IMPORT_BYTE
 }
 
 /** HTTP adapter mounted by server.ts for /motion-api/design/* (rewritten to /api/design/*). */
-const THUMB_PERF_SCRIPT = `<style data-om-thumb-style>html:not([data-om-thumb-play="1"]) *,html:not([data-om-thumb-play="1"]) *::before,html:not([data-om-thumb-play="1"]) *::after{animation-play-state:paused!important;transition:none!important;}</style><script data-om-thumb-guard>(function(){try{Object.defineProperty(window,'devicePixelRatio',{get:function(){return 1;},configurable:true});}catch(e){}var nRaf=window.requestAnimationFrame.bind(window),nCaf=window.cancelAnimationFrame.bind(window);var playing=false,budget=3,q=[],nextId=1;window.requestAnimationFrame=function(cb){if(playing||budget>0){if(!playing)budget--;return nRaf(cb);}var id=nextId++;q.push({id:id,cb:cb});return id;};window.cancelAnimationFrame=function(id){nCaf(id);q=q.filter(function(x){return x.id!==id;});};window.addEventListener('message',function(e){var d=e.data;if(!d||d.type!=='om:thumb-play')return;playing=Boolean(d.play);document.documentElement.setAttribute('data-om-thumb-play',playing?'1':'0');if(playing&&q.length){var batch=q.splice(0,q.length);for(var i=0;i<batch.length;i++)nRaf(batch[i].cb);}});})();</script>`;
+const THUMB_PERF_SCRIPT = `<style data-om-thumb-style>html:not([data-om-thumb-play="1"]) *,html:not([data-om-thumb-play="1"]) *::before,html:not([data-om-thumb-play="1"]) *::after{animation-play-state:paused!important;transition:none!important;}</style><script data-om-thumb-guard>(function(){try{Object.defineProperty(window,'devicePixelRatio',{get:function(){return 1;},configurable:true});}catch(e){}var nRaf=window.requestAnimationFrame.bind(window),nCaf=window.cancelAnimationFrame.bind(window),nSetInt=window.setInterval.bind(window),nClearInt=window.clearInterval.bind(window);var playing=false,budget=3,q=[],nextId=1,intervals=[],glContexts=[];try{var origGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type){var ctx=origGetContext.apply(this,arguments);if(ctx&&(type==='webgl'||type==='webgl2'||type==='experimental-webgl')){if(glContexts.indexOf(ctx)===-1)glContexts.push(ctx);}return ctx;};}catch(e){}window.requestAnimationFrame=function(cb){if(playing||budget>0){if(!playing)budget--;return nRaf(cb);}var id=nextId++;if(q.length<64)q.push({id:id,cb:cb});return id;};window.cancelAnimationFrame=function(id){nCaf(id);q=q.filter(function(x){return x.id!==id;});};window.setInterval=function(fn,delay){if(typeof fn!=='function'){var rawId=nSetInt.apply(window,arguments);intervals.push(rawId);return rawId;}var args=Array.prototype.slice.call(arguments,2);var id=nSetInt(function(){if(playing)fn.apply(window,args);},delay);intervals.push(id);return id;};window.clearInterval=function(id){nClearInt(id);var idx=intervals.indexOf(id);if(idx!==-1)intervals.splice(idx,1);};function dispose(){playing=false;q.length=0;while(intervals.length){try{nClearInt(intervals.pop());}catch(e){}}while(glContexts.length){var ctx=glContexts.pop();try{var ext=ctx&&ctx.getExtension&&ctx.getExtension('WEBGL_lose_context');if(ext&&ext.loseContext)ext.loseContext();}catch(e){}}}window.addEventListener('pagehide',dispose,{once:true});window.addEventListener('message',function(e){var d=e.data;if(!d)return;if(d.type==='om:thumb-dispose'){dispose();return;}if(d.type!=='om:thumb-play')return;playing=Boolean(d.play);document.documentElement.setAttribute('data-om-thumb-play',playing?'1':'0');if(playing&&q.length){var batch=q.splice(0,q.length);for(var i=0;i<batch.length;i++)nRaf(batch[i].cb);}});})();</script>`;
 
 const THUMB_READY_SCRIPT = `<script data-om-thumb-ready>window.addEventListener('load',function(){window.parent.postMessage({type:'om:thumb-ready'},'*');},{once:true});</script>`;
 
@@ -1474,6 +1628,51 @@ function injectThumbPerfGuard(buf: Buffer, notifyReady = false): Buffer {
   return Buffer.from(injected, 'utf8');
 }
 
+async function importResolvedAsset(
+  service: DesignProjects,
+  projectId: string,
+  input: {
+    requestId: string;
+    expectedRevision: string;
+    assetId: string;
+    versionId: string;
+    path?: string;
+    summary?: string;
+    source: 'agent' | 'manual';
+  },
+  origin: string,
+  resolveAsset?: DesignAssetResolver,
+) {
+  if (!resolveAsset) throw new DesignError('UNSUPPORTED', 'Workspace asset import is not available in this context');
+  if (!input.expectedRevision || !input.assetId || !input.versionId) {
+    throw new DesignError('INVALID_ARGUMENT', 'expectedRevision, assetId and versionId are required');
+  }
+  let resolved;
+  try {
+    resolved = await resolveAsset({ assetId: input.assetId, versionId: input.versionId });
+  } catch (error) {
+    const message = (error as Error)?.message ?? 'Workspace asset not found';
+    if (/ASSET_NOT_FOUND|ASSET_VERSION_UNAVAILABLE/i.test(message)) {
+      throw new DesignError('NOT_FOUND', message);
+    }
+    throw error;
+  }
+  const ext = path.extname(resolved.filename).toLowerCase();
+  const slug = slugifyAssetName(resolved.asset.name || resolved.version.name || 'asset');
+  const defaultPath = `assets/${slug}-${resolved.version.id.slice(0, 8)}${ext}`;
+  return service.importBinaryFile(projectId, {
+    requestId: input.requestId,
+    expectedRevision: input.expectedRevision,
+    sourcePath: resolved.filename,
+    expectedSha256: resolved.version.sha256,
+    path: input.path ?? defaultPath,
+    name: resolved.asset.name,
+    versionId: resolved.version.id,
+    summary: input.summary ?? `Imported asset ${resolved.asset.name}`,
+    source: input.source,
+  }, origin);
+}
+
 export async function designHttp(
   req: IncomingMessage,
   res: ServerResponse,
@@ -1481,6 +1680,7 @@ export async function designHttp(
   dataDirectory: string,
   origin: string,
   input: (req: IncomingMessage, limit?: number) => Promise<any>,
+  resolveAsset?: DesignAssetResolver,
 ): Promise<boolean> {
   if (!url.pathname.startsWith('/api/design/')) return false;
   const service = designProjectsFor(dataDirectory);
@@ -1493,6 +1693,31 @@ export async function designHttp(
   const sendError = (error: unknown) => {
     if (error instanceof DesignError) return sendJson(error.status, { error: { code: error.code, message: error.message.replace(/^[A-Z_]+:\s*/, '') } });
     return sendJson(500, { error: { code: 'INVALID_ARGUMENT', message: (error as Error)?.message ?? 'Internal error' } });
+  };
+  const sendPreviewPreflight = () => {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Range',
+      'Cache-Control': 'no-store',
+    });
+    res.end();
+    return true;
+  };
+  const sendPreviewResponse = (body: Buffer, mime: string, cacheControl: string) => {
+    const headers: Record<string, string> = {
+      // Sandboxed preview frames run without allow-same-origin (origin 'null'), so relative fetches need ACAO.
+      'Access-Control-Allow-Origin': '*',
+      'Content-Type': mime,
+      'Cache-Control': cacheControl,
+      'X-Content-Type-Options': 'nosniff',
+    };
+    if (mime.startsWith('text/html')) {
+      headers['Content-Security-Policy'] = 'sandbox allow-scripts allow-forms allow-modals allow-popups allow-downloads';
+    }
+    res.writeHead(200, headers);
+    res.end(req.method === 'HEAD' ? undefined : body);
+    return true;
   };
 
   try {
@@ -1511,19 +1736,18 @@ export async function designHttp(
       }));
     }
     const tplPreview = /^catalog\/templates\/([^/]+)\/preview\/(.*)$/.exec(sub);
-    if (tplPreview && req.method === 'GET') {
-      const id = decodeURIComponent(tplPreview[1]);
-      const rel = decodeURIComponent(tplPreview[2]);
-      const file = catalog.templateFile(id, rel);
-      if (!file) return sendJson(404, { error: { code: 'NOT_FOUND', message: 'Template preview file not found' } });
-      const mime = mimeFor(file);
-      let data: Buffer = await readFile(file);
-      if (url.searchParams.get('thumb') === '1' && mime.startsWith('text/html')) data = injectThumbPerfGuard(data, url.searchParams.get('thumbReady') === '1');
-      const headers: Record<string, string> = { 'Content-Type': mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' };
-      if (mime.startsWith('text/html')) headers['Content-Security-Policy'] = 'sandbox allow-scripts allow-forms allow-modals allow-popups allow-downloads';
-      res.writeHead(200, headers);
-      res.end(data);
-      return true;
+    if (tplPreview) {
+      if (req.method === 'OPTIONS') return sendPreviewPreflight();
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        const id = decodeURIComponent(tplPreview[1]);
+        const rel = decodeURIComponent(tplPreview[2]);
+        const file = catalog.templateFile(id, rel);
+        if (!file) return sendJson(404, { error: { code: 'NOT_FOUND', message: 'Template preview file not found' } });
+        const mime = mimeFor(file);
+        let data: Buffer = await readFile(file);
+        if (url.searchParams.get('thumb') === '1' && mime.startsWith('text/html')) data = injectThumbPerfGuard(data, url.searchParams.get('thumbReady') === '1');
+        return sendPreviewResponse(data, mime, 'private, max-age=300');
+      }
     }
     const tplDetail = /^catalog\/templates\/([^/]+)$/.exec(sub);
     if (tplDetail && req.method === 'GET') {
@@ -1560,14 +1784,18 @@ export async function designHttp(
 
     // --- Raw static preview (current or historical ?version=) ---
     const rawMatch = /^raw\/([^/]+)\/(.*)$/.exec(sub);
-    if (rawMatch && req.method === 'GET') {
-      const { body, mime } = await service.readRawFile(rawMatch[1], decodeURIComponent(rawMatch[2]), url.searchParams.get('version'));
-      const out = url.searchParams.get('thumb') === '1' && mime.startsWith('text/html') ? injectThumbPerfGuard(body) : body;
-      const headers: Record<string, string> = { 'Content-Type': mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
-      if (mime.startsWith('text/html')) headers['Content-Security-Policy'] = 'sandbox allow-scripts allow-forms allow-modals allow-popups allow-downloads';
-      res.writeHead(200, headers);
-      res.end(out);
-      return true;
+    if (rawMatch) {
+      if (req.method === 'OPTIONS') return sendPreviewPreflight();
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        const { body, mime } = await service.readRawFile(rawMatch[1], decodeURIComponent(rawMatch[2]), url.searchParams.get('version'));
+        const bridgeToken = url.searchParams.get('omBridge');
+        const out = url.searchParams.get('thumb') === '1' && mime.startsWith('text/html')
+          ? injectThumbPerfGuard(body)
+          : mime.startsWith('text/html') && isValidPreviewBridgeToken(bridgeToken)
+            ? injectPreviewBridgeHtml(body, bridgeToken)
+            : body;
+        return sendPreviewResponse(out, mime, 'no-store');
+      }
     }
 
     // --- Projects collection ---
@@ -1625,6 +1853,20 @@ export async function designHttp(
       return sendJson(200, await service.write(writeMatch[1], { ...body, requestId: body?.requestId || randomUUID() }, origin));
     }
 
+    const importAssetMatch = /^projects\/([^/]+)\/import-asset$/.exec(sub);
+    if (importAssetMatch && req.method === 'POST') {
+      const body = await input(req, 32 * 1024);
+      return sendJson(200, await importResolvedAsset(service, importAssetMatch[1], {
+        requestId: body?.requestId || randomUUID(),
+        expectedRevision: body?.expectedRevision,
+        assetId: body?.assetId,
+        versionId: body?.versionId,
+        path: body?.path,
+        summary: body?.summary,
+        source: 'manual',
+      }, origin, resolveAsset));
+    }
+
     const versionsMatch = /^projects\/([^/]+)\/versions$/.exec(sub);
     if (versionsMatch && req.method === 'GET') {
       return sendJson(200, await service.listVersions(versionsMatch[1], { cursor: url.searchParams.get('cursor') ?? undefined }));
@@ -1659,7 +1901,7 @@ export async function designHttp(
       const result = await service.exportProject(exportMatch[1], body ?? {});
       res.writeHead(200, {
         'Content-Type': result.mime,
-        'Content-Disposition': `attachment; filename="${result.filename.replace(/"/g, '')}"`,
+        'Content-Disposition': attachmentDisposition(result.filename),
         'Content-Length': result.data.length,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
@@ -1668,13 +1910,85 @@ export async function designHttp(
       return true;
     }
 
+    const deployMatch = /^projects\/([^/]+)\/deploy$/.exec(sub);
+    if (deployMatch) {
+      const id = deployMatch[1];
+      const deployService = designDeployFor(dataDirectory);
+      try {
+        if (req.method === 'GET') {
+          const reqFilePath = url.searchParams.get('filePath') ?? undefined;
+          let project: { id: string; entry: string; path?: string; title?: string };
+          try {
+            project = await service.get(id, origin);
+          } catch (error) {
+            if (error instanceof DesignError && error.code === 'NOT_FOUND') {
+              const storedEntry = await deployService.webPublish.findStoredEntryPath('design', id, reqFilePath);
+              if (storedEntry) {
+                project = { id, entry: storedEntry };
+              } else {
+                throw error;
+              }
+            } else {
+              throw error;
+            }
+          }
+          const status = await deployService.status(project, {
+            filePath: reqFilePath,
+            refresh: url.searchParams.get('refresh') === '1',
+          });
+          return sendJson(200, status);
+        }
+        if (req.method === 'POST') {
+          const project = await service.get(id, origin);
+          const body = await input(req, 32 * 1024).catch(() => ({}));
+          const result = await deployService.deploy(project, project.path, {
+            filePath: typeof body?.filePath === 'string' ? body.filePath : undefined,
+            workspaceId: typeof body?.workspaceId === 'string' ? body.workspaceId : undefined,
+            mode: body?.deployMode as DesignDeployMode | undefined,
+            name: typeof body?.name === 'string' ? body.name : undefined,
+          });
+          return sendJson(200, result);
+        }
+        if (req.method === 'DELETE') {
+          const body = await input(req, 16 * 1024).catch(() => ({}));
+          const filePath = url.searchParams.get('filePath')
+            ?? (typeof body?.filePath === 'string' ? body.filePath : undefined);
+          let project: { id: string; entry: string };
+          try {
+            project = await service.get(id, origin);
+          } catch (error) {
+            if (error instanceof DesignError && error.code === 'NOT_FOUND') {
+              const storedEntry = await deployService.webPublish.findStoredEntryPath('design', id, filePath);
+              if (storedEntry) {
+                project = { id, entry: storedEntry };
+              } else {
+                throw error;
+              }
+            } else {
+              throw error;
+            }
+          }
+          const result = await deployService.unpublish(project, { filePath });
+          return sendJson(200, result);
+        }
+      } catch (error) {
+        mapDeployError(error);
+      }
+    }
+
     return sendJson(404, { error: { code: 'NOT_FOUND', message: `Unknown design endpoint: ${url.pathname}` } });
   } catch (error) {
     return sendError(error);
   }
 }
 
-export async function dispatchDesignTool(name: string, args: any, dataDirectory: string, origin: string): Promise<unknown> {
+export async function dispatchDesignTool(
+  name: string,
+  args: any,
+  dataDirectory: string,
+  origin: string,
+  resolveAsset?: DesignAssetResolver,
+): Promise<unknown> {
   const service = designProjectsFor(dataDirectory);
   const catalog = designCatalog();
 
@@ -1781,6 +2095,73 @@ export async function dispatchDesignTool(name: string, args: any, dataDirectory:
         const projects = await service.importPath(args.sourcePath, { titleHint: args.title, origin });
         return { projects };
       }
+      case 'deploy': {
+        if (!args.projectId) throw new DesignError('INVALID_ARGUMENT', 'projectId is required');
+        const project = await service.get(args.projectId, origin);
+        try {
+          return await designDeployFor(dataDirectory).deploy(project, project.path, {
+            filePath: args.filePath,
+            workspaceId: args.workspaceId,
+            mode: args.deployMode,
+            name: args.title,
+          });
+        } catch (error) {
+          mapDeployError(error);
+        }
+      }
+      case 'deploy_status': {
+        if (!args.projectId) throw new DesignError('INVALID_ARGUMENT', 'projectId is required');
+        const deployService = designDeployFor(dataDirectory);
+        let project: { id: string; entry: string; path?: string; title?: string };
+        try {
+          project = await service.get(args.projectId, origin);
+        } catch (error) {
+          if (error instanceof DesignError && error.code === 'NOT_FOUND') {
+            const storedEntry = await deployService.webPublish.findStoredEntryPath('design', args.projectId, args.filePath);
+            if (storedEntry) {
+              project = { id: args.projectId, entry: storedEntry };
+            } else {
+              throw error;
+            }
+          } else {
+            throw error;
+          }
+        }
+        try {
+          return await deployService.status(project, {
+            filePath: args.filePath,
+            refresh: args.refresh === true,
+          });
+        } catch (error) {
+          mapDeployError(error);
+        }
+      }
+      case 'unpublish': {
+        if (!args.projectId) throw new DesignError('INVALID_ARGUMENT', 'projectId is required');
+        const deployService = designDeployFor(dataDirectory);
+        let project: { id: string; entry: string };
+        try {
+          project = await service.get(args.projectId, origin);
+        } catch (error) {
+          if (error instanceof DesignError && error.code === 'NOT_FOUND') {
+            const storedEntry = await deployService.webPublish.findStoredEntryPath('design', args.projectId, args.filePath);
+            if (storedEntry) {
+              project = { id: args.projectId, entry: storedEntry };
+            } else {
+              throw error;
+            }
+          } else {
+            throw error;
+          }
+        }
+        try {
+          return await deployService.unpublish(project, {
+            filePath: args.filePath,
+          });
+        } catch (error) {
+          mapDeployError(error);
+        }
+      }
       default: throw new DesignError('INVALID_ARGUMENT', `Unknown project action: ${args.action}`);
     }
   }
@@ -1804,6 +2185,17 @@ export async function dispatchDesignTool(name: string, args: any, dataDirectory:
       case 'restore_version': {
         if (!args.versionId || !args.expectedRevision) throw new DesignError('INVALID_ARGUMENT', 'versionId and expectedRevision are required');
         return service.restoreVersion(args.projectId, args.versionId, { requestId: args.requestId || randomUUID(), expectedRevision: args.expectedRevision }, origin);
+      }
+      case 'import_asset': {
+        return importResolvedAsset(service, args.projectId, {
+          requestId: args.requestId || randomUUID(),
+          expectedRevision: args.expectedRevision,
+          assetId: args.assetId,
+          versionId: args.versionId,
+          path: args.path,
+          summary: args.summary,
+          source: 'agent',
+        }, origin, resolveAsset);
       }
       default: throw new DesignError('INVALID_ARGUMENT', `Unknown edit action: ${args.action}`);
     }

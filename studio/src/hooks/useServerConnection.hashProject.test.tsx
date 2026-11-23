@@ -416,3 +416,83 @@ describe("project_hash_validated", () => {
     await act(async () => root.unmount());
   });
 });
+
+describe("useServerConnection semantic /editor/:projectId synchronization", () => {
+  beforeEach(() => {
+    captured.projectId = null;
+    window.history.replaceState(null, "", "/");
+    vi.mocked(trackStudioEvent).mockClear();
+  });
+
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+    vi.unstubAllGlobals();
+  });
+
+  it("rewrites both /editor/:id pathname and hash on mount fallback while preserving query params", async () => {
+    stubFetch({ status: 404 });
+    window.history.replaceState(null, "", "/editor/deleted-project?embed=1#project/deleted-project");
+    const before = window.history.length;
+
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Probe />));
+    await flush();
+
+    expect(captured.projectId).toBe("real-project");
+    expect(window.location.pathname).toBe("/editor/real-project");
+    expect(window.location.search).toBe("?embed=1");
+    expect(window.location.hash).toBe("#project/real-project");
+    expect(window.history.length).toBe(before);
+    await act(async () => root.unmount());
+  });
+
+  it("validates a dead /editor/:id pathname even without a hash and rewrites to the fallback project", async () => {
+    stubFetch({ status: 404 });
+    window.history.replaceState(null, "", "/editor/deleted-no-hash");
+
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Probe />));
+    await flush();
+
+    expect(captured.projectId).toBe("real-project");
+    expect(window.location.pathname).toBe("/editor/real-project");
+    expect(window.location.hash).toBe("#project/real-project");
+    await act(async () => root.unmount());
+  });
+
+  it("rewrites both pathname and hash when hashchange lands on a deleted project under /editor/:id", async () => {
+    stubFetchByProject({ first: 200, deleted: 404 });
+    window.history.replaceState(null, "", "/editor/first#project/first");
+
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Probe />));
+    await flush();
+    expect(captured.projectId).toBe("first");
+
+    const before = window.history.length;
+    await replaceHashAndDispatch("#project/deleted");
+
+    expect(captured.projectId).toBe("real-project");
+    expect(window.location.pathname).toBe("/editor/real-project");
+    expect(window.location.hash).toBe("#project/real-project");
+    expect(window.history.length).toBe(before);
+    await act(async () => root.unmount());
+  });
+
+  it("syncs /editor/:id pathname on a valid hashchange while preserving hash query parameters", async () => {
+    stubFetchByProject({ first: 200, second: 200 });
+    window.history.replaceState(null, "", "/editor/first#project/first");
+
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Probe />));
+    await flush();
+    expect(captured.projectId).toBe("first");
+
+    await replaceHashAndDispatch("#project/second?t=5");
+
+    expect(captured.projectId).toBe("second");
+    expect(window.location.pathname).toBe("/editor/second");
+    expect(window.location.hash).toBe("#project/second?t=5");
+    await act(async () => root.unmount());
+  });
+});

@@ -179,6 +179,7 @@ it.each(['account', 'subscription'] as const)('shows the same sign-in benefits o
   expect(page.querySelector('.om-plan-guide .om-button')?.textContent).toBe('使用 OpenDesign 登录');
   expect([...page.querySelectorAll('.om-account-capabilities li')].map(item => item.textContent)).toEqual(['图片', '视频', '配音', '音乐']);
   expect(page.querySelector('.om-plan-guide p')?.textContent).toBe('登录后升级到 Plus，即可在 OpenMotion 里直接生成图片、视频、配音和音乐，不用配置 API 密钥。');
+  expect(page.querySelector('.om-account-offer')?.textContent).toBe('多模态 $14/月起');
   expect(page.querySelectorAll('.om-account-metrics .om-card')).toHaveLength(section === 'subscription' ? 2 : 0);
   expect(page.querySelector('[data-guide="upgrade"]')).toBeNull();
 });

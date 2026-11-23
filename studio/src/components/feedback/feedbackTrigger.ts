@@ -161,7 +161,11 @@ export interface FeedbackContext {
 
 export interface FeedbackRequest {
   reason: FeedbackReason;
-  /** Render job the prompt is about — joins the response to the render event. */
+  /**
+   * Opaque identifier for this prompt, minted by the trigger. It joins the feedback
+   * events for one render without exporting the render job id, which embeds the
+   * project id and a timestamp. Producers must not set it.
+   */
   renderId?: string;
   /** Failure text shown to the user, sent verbatim so reports are actionable. */
   detail?: string;
@@ -248,7 +252,10 @@ export function requestStudioFeedback(request: FeedbackRequest): void {
   if (!listener) return;
   if (!isEligible(Date.now())) return;
   markAskedThisSession();
-  listener(request);
+  // Mint the join key here. The render job id is the server record id, which embeds
+  // the project id and a timestamp, so it must not leave the browser; this opaque id
+  // still ties the shown, dismissed, interview and rating events of one prompt together.
+  listener({ ...request, renderId: crypto.randomUUID() });
 }
 
 /** Subscribe the card. Single-subscriber by design — there is one card. */

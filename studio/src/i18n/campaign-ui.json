@@ -8,7 +8,8 @@
     ", up to 50% off annual": "，年付低至 5 折",
     "Claim offer": "领取优惠",
     "Close campaign banner": "关闭活动 Banner",
-    "Pricing · Black Friday up to 50% off": "Pricing · 黑五特惠年付低至 5 折"
+    "Pricing · Black Friday up to 50% off": "Pricing · 黑五特惠年付低至 5 折",
+    "Free credits": "免费额度"
   },
   "ja": {
     "Black Friday campaign banner": "ブラックフライデーキャンペーンバナー",
@@ -19,7 +20,8 @@
     ", up to 50% off annual": "、年払いは最大50%オフ",
     "Claim offer": "特典を受け取る",
     "Close campaign banner": "キャンペーンバナーを閉じる",
-    "Pricing · Black Friday up to 50% off": "Pricing · ブラックフライデー 年払い最大50%オフ"
+    "Pricing · Black Friday up to 50% off": "Pricing · ブラックフライデー 年払い最大50%オフ",
+    "Free credits": "無料クレジット"
   },
   "ko": {
     "Black Friday campaign banner": "블랙프라이데이 캠페인 배너",
@@ -30,7 +32,8 @@
     ", up to 50% off annual": ", 연간 결제 최대 50% 할인",
     "Claim offer": "혜택 받기",
     "Close campaign banner": "캠페인 배너 닫기",
-    "Pricing · Black Friday up to 50% off": "Pricing · 블랙프라이데이 연간 결제 최대 50% 할인"
+    "Pricing · Black Friday up to 50% off": "Pricing · 블랙프라이데이 연간 결제 최대 50% 할인",
+    "Free credits": "무료 크레딧"
   },
   "de": {
     "Black Friday campaign banner": "Black-Friday-Aktionsbanner",
@@ -41,7 +44,8 @@
     ", up to 50% off annual": ", bis zu 50 % Rabatt auf Jahrespläne",
     "Claim offer": "Angebot sichern",
     "Close campaign banner": "Aktionsbanner schließen",
-    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: bis zu 50 % Rabatt"
+    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: bis zu 50 % Rabatt",
+    "Free credits": "Gratis-Credits"
   },
   "fr": {
     "Black Friday campaign banner": "Bannière de la campagne Black Friday",
@@ -52,7 +56,8 @@
     ", up to 50% off annual": ", jusqu’à -50 % sur l’abonnement annuel",
     "Claim offer": "Profiter de l’offre",
     "Close campaign banner": "Fermer la bannière de la campagne",
-    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday : jusqu’à -50 %"
+    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday : jusqu’à -50 %",
+    "Free credits": "Crédits offerts"
   },
   "ru": {
     "Black Friday campaign banner": "Баннер акции «Чёрная пятница»",
@@ -63,7 +68,8 @@
     ", up to 50% off annual": ", годовой план со скидкой до 50%",
     "Claim offer": "Получить скидку",
     "Close campaign banner": "Закрыть баннер акции",
-    "Pricing · Black Friday up to 50% off": "Pricing · Чёрная пятница: скидка до 50%"
+    "Pricing · Black Friday up to 50% off": "Pricing · Чёрная пятница: скидка до 50%",
+    "Free credits": "Бесплатные кредиты"
   },
   "es": {
     "Black Friday campaign banner": "Banner de la campaña Black Friday",
@@ -74,7 +80,8 @@
     ", up to 50% off annual": ", hasta un 50 % de descuento en el plan anual",
     "Claim offer": "Obtener oferta",
     "Close campaign banner": "Cerrar banner de la campaña",
-    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: hasta un 50 % de descuento"
+    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: hasta un 50 % de descuento",
+    "Free credits": "Créditos gratis"
   },
   "pt-BR": {
     "Black Friday campaign banner": "Banner da campanha Black Friday",
@@ -85,7 +92,8 @@
     ", up to 50% off annual": ", até 50% de desconto no plano anual",
     "Claim offer": "Aproveitar oferta",
     "Close campaign banner": "Fechar banner da campanha",
-    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: até 50% de desconto"
+    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: até 50% de desconto",
+    "Free credits": "Créditos grátis"
   },
   "it": {
     "Black Friday campaign banner": "Banner della campagna Black Friday",
@@ -96,7 +104,8 @@
     ", up to 50% off annual": ", fino al 50% di sconto sul piano annuale",
     "Claim offer": "Approfitta dell’offerta",
     "Close campaign banner": "Chiudi il banner della campagna",
-    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: fino al 50% di sconto"
+    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: fino al 50% di sconto",
+    "Free credits": "Crediti gratis"
   },
   "tr": {
     "Black Friday campaign banner": "Black Friday kampanya banner'ı",
@@ -107,6 +116,7 @@
     ", up to 50% off annual": ", yıllık planda %50'ye varan indirim",
     "Claim offer": "Fırsatı yakala",
     "Close campaign banner": "Kampanya banner'ını kapat",
-    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: %50'ye varan indirim"
+    "Pricing · Black Friday up to 50% off": "Pricing · Black Friday: %50'ye varan indirim",
+    "Free credits": "Ücretsiz kredi"
   }
 }

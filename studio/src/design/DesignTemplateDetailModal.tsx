@@ -69,19 +69,8 @@ export function DesignTemplateDetailModal({
         <Dialog.Backdrop className="om-design-dialog-backdrop" />
         <Dialog.Popup ref={popupRef} className="om-media-detail-surface om-media-detail-popup om-design-tpl-detail-popup" data-feedback-modal={studioActions || undefined} aria-label={template.title}>
           <div className="om-media-detail-grid">
-            {/* Left interactive preview stage with Motion-aligned ambient frosted backdrop */}
+            {/* Left interactive preview stage */}
             <div className="om-media-detail-stage om-design-tpl-stage">
-              <iframe
-                key={`ambient-${template.id}`}
-                title=""
-                aria-hidden="true"
-                tabIndex={-1}
-                src={`${template.previewUrl}?thumb=1`}
-                sandbox="allow-scripts"
-                className="om-media-detail-ambient om-design-tpl-ambient"
-              />
-              <div className="om-media-detail-glass" />
-
               <div className="om-design-tpl-stage-bar">
                 <div className="om-design-segmented">
                   {designViewports.map(item => (

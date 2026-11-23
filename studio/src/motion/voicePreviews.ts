@@ -1,7 +1,18 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Model } from '../../../shared/gateway';
 import { generationOptions } from '../../../shared/generation-options';
+import { BoundedLruCache } from '../../../shared/lifecycle';
 import type { SoundPlayableTrack } from './SoundPlayerDock';
 import { deterministicWaveform } from './soundPresets';
+
+function inferredPreviewMime(src: string): string | undefined {
+  const clean = src.split(/[?#]/, 1)[0].toLowerCase();
+  if (clean.endsWith('.mp3')) return 'audio/mpeg';
+  if (clean.endsWith('.m4a') || clean.endsWith('.mp4')) return 'audio/mp4';
+  if (clean.endsWith('.wav')) return 'audio/wav';
+  if (clean.endsWith('.ogg')) return 'audio/ogg';
+  return undefined;
+}
 
 export interface VoicePreviewSource {
   src: string;
@@ -100,4 +111,191 @@ export function buildVoicePreviewTrack(
     blobSource: source.blobSource,
     waveform: deterministicWaveform(`voice:${model.id}:${voice.value}`, 44),
   };
+}
+
+/**
+ * Isolated voice-audition playback controller with session-scoped Blob URL caching.
+ * Keeps right-side track playback & bottom Player Dock intact instead of unloading them.
+ */
+export function useVoiceAudition({
+  active,
+  onPlayStart,
+  onError,
+}: {
+  active: boolean;
+  onPlayStart?: () => void;
+  onError?: () => void;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobCacheRef = useRef<BoundedLruCache<string, string> | null>(null);
+  const getBlobCache = useCallback(() => {
+    if (!blobCacheRef.current) {
+      blobCacheRef.current = new BoundedLruCache<string, string>({
+        maxEntries: 12,
+        onEvict: url => URL.revokeObjectURL(url),
+      });
+    }
+    return blobCacheRef.current;
+  }, []);
+  const abortRef = useRef<AbortController | null>(null);
+  const autoplayRef = useRef(false);
+  const onPlayStartRef = useRef(onPlayStart);
+  const onErrorRef = useRef(onError);
+  onPlayStartRef.current = onPlayStart;
+  onErrorRef.current = onError;
+
+  const [activeTrack, setActiveTrack] = useState<{ id: string; title: string } | null>(null);
+  const [resolvedSrc, setResolvedSrc] = useState('');
+  const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    autoplayRef.current = false;
+    const el = audioRef.current;
+    if (el) {
+      el.pause();
+      try { el.currentTime = 0; } catch {}
+    }
+    setPlaying(false);
+    setLoading(false);
+    setActiveTrack(null);
+    setResolvedSrc('');
+  }, []);
+
+  // Pause and clean up when leaving Sound Studio or switching tabs.
+  useEffect(() => {
+    const pauseIfHidden = () => {
+      if (!active || document.hidden) audioRef.current?.pause();
+    };
+    pauseIfHidden();
+    document.addEventListener('visibilitychange', pauseIfHidden);
+    return () => document.removeEventListener('visibilitychange', pauseIfHidden);
+  }, [active]);
+
+  // Revoke session-cached preview blobs cleanly on unmount.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      audioRef.current?.pause();
+      blobCacheRef.current?.clear();
+    };
+  }, []);
+
+  // Autoplay once the resolved audio source mounts.
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !resolvedSrc || !autoplayRef.current) return;
+    autoplayRef.current = false;
+    void el.play().catch(() => setPlaying(false));
+  }, [resolvedSrc]);
+
+  const toggle = useCallback((model: Model, voice: VoicePreviewTarget) => {
+    const source = resolveVoicePreview(model, voice.value, voice.previewUrl);
+    if (!source) return;
+    const trackId = voicePreviewTrackId(model.id, voice.value);
+
+    // Clicking the currently active orb toggles play/pause (or cancels in-flight loading).
+    if (activeTrack?.id === trackId) {
+      if (loading) {
+        stop();
+        return;
+      }
+      const el = audioRef.current;
+      if (el && resolvedSrc) {
+        if (el.paused) {
+          onPlayStartRef.current?.();
+          if (el.ended) el.currentTime = 0;
+          void el.play().catch(() => setPlaying(false));
+        } else {
+          el.pause();
+        }
+        return;
+      }
+    }
+
+    abortRef.current?.abort();
+    abortRef.current = null;
+    audioRef.current?.pause();
+    onPlayStartRef.current?.();
+    setPlaying(false);
+    setActiveTrack({ id: trackId, title: voice.name });
+
+    if (!source.blobSource) {
+      autoplayRef.current = true;
+      setLoading(false);
+      setResolvedSrc(source.src);
+      return;
+    }
+
+    const cached = getBlobCache().get(source.src);
+    if (cached) {
+      autoplayRef.current = true;
+      setLoading(false);
+      setResolvedSrc(cached);
+      return;
+    }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setResolvedSrc('');
+    setLoading(true);
+    fetch(source.src, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) })
+      .then(response => {
+        if (!response.ok) throw new Error('Audio preview unavailable');
+        return response.blob();
+      })
+      .then(blob => {
+        if (controller.signal.aborted) return;
+        const mime = inferredPreviewMime(source.src);
+        const normalized = (!blob.type || blob.type === 'text/plain' || blob.type === 'application/octet-stream') && mime
+          ? new Blob([blob], { type: mime })
+          : blob;
+        const objectUrl = URL.createObjectURL(normalized);
+        getBlobCache().set(source.src, objectUrl);
+        autoplayRef.current = true;
+        setResolvedSrc(objectUrl);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setPlaying(false);
+          setActiveTrack(null);
+          setResolvedSrc('');
+          onErrorRef.current?.();
+        }
+      });
+  }, [activeTrack?.id, loading, resolvedSrc, stop]);
+
+  const controller: VoicePreviewController = useMemo(() => ({
+    activeTrackId: activeTrack?.id,
+    playing,
+    loading,
+    resolve: (model, voice) => resolveVoicePreview(model, voice.value, voice.previewUrl),
+    toggle,
+  }), [activeTrack?.id, playing, loading, toggle]);
+
+  const audioProps = activeTrack && resolvedSrc ? {
+    ref: audioRef,
+    src: resolvedSrc,
+    preload: 'metadata' as const,
+    'aria-label': activeTrack.title,
+    onPlay: () => setPlaying(true),
+    onPause: () => setPlaying(false),
+    onEnded: () => {
+      setPlaying(false);
+      setActiveTrack(null);
+    },
+    onError: () => {
+      setPlaying(false);
+      setLoading(false);
+      setActiveTrack(null);
+      setResolvedSrc('');
+      onErrorRef.current?.();
+    },
+  } : null;
+
+  return { controller, audioProps, stop };
 }

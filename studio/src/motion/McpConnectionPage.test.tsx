@@ -307,3 +307,24 @@ it.each([
   expect(faq.textContent).toContain('Codex');
   expect(faq.textContent).toContain('OpenMotion');
 });
+
+it.each(['en', 'zh-CN'] as const)('copies the Black Friday campaign workflow handoff with workspace context in %s', async locale => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.includes('template-catalog') ? { items: [] } : info)));
+  const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+  await mount(locale);
+  expect(document.querySelector('[data-mcp-scenario="scenario-workflows"]')).not.toBeNull();
+  expect(document.querySelector('[data-mcp-scenario="design-embed-assets"]')).not.toBeNull();
+  const card = document.querySelector('[data-mcp-scenario="scenario-black-friday"]')!;
+  expect(card).not.toBeNull();
+  expect(card.querySelector('h3')?.textContent).toBe(locale === 'en' ? 'Run the Black Friday campaign workflow' : '运行黑五电商活动工作流');
+  await act(async () => card.querySelector('button')!.click());
+  expect(copy).toHaveBeenCalledOnce();
+  const instruction = copy.mock.calls[0][0];
+  for (const token of ['openmotion_assets_use', 'action=scenario', 'openmotion_design_project', 'openmotion_design_edit', 'import_asset', 'openmotion_create_project', 'openmotion_open_preview', info.dataDirectory, info.previewUrl, `Reply and write visible copy in: ${locale}`]) {
+    expect(instruction).toContain(token);
+  }
+  expect(document.querySelector('.motion-feedback-layer [role=status]')?.textContent).toContain(locale === 'en' ? 'Copied' : '已复制');
+  copy.mockRejectedValue(new Error('Clipboard blocked'));
+  await act(async () => card.querySelector('button')!.click());
+  expect(card.querySelector('textarea')?.value).toBe(instruction);
+});

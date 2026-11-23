@@ -1,6 +1,6 @@
 import { modelReferenceLimit, type Model, type Modality } from '../../../shared/gateway';
-import { imageFeatureModel, type ImageFeatureId } from '../../../shared/image-features';
-import type { VideoFeatureId } from '../../../shared/video-features';
+import { imageFeatureSupported, type ImageFeatureId } from '../../../shared/image-features';
+import { videoFeatureCapable, type VideoFeatureId } from '../../../shared/video-features';
 import { creativeStudios, findMediaStudio, studioScenes, type CreativeStudio, type MediaStudio, type TechniqueStudio, type StudioScene } from '../../../shared/studio-catalog';
 
 export { creativeStudios, studioScenes, type StudioScene };
@@ -55,11 +55,18 @@ export function mediaEditorDestination(sceneOrId: StudioScene | StudioScene['id'
 export const needsImage = (scene: StudioScene) => 'requiresImage' in scene && scene.requiresImage;
 export const sceneFeature = (scene: StudioScene): ImageFeatureId | undefined => 'feature' in scene ? scene.feature : undefined;
 export const sceneVideoFeature = (scene: StudioScene): VideoFeatureId | undefined => 'videoFeature' in scene ? scene.videoFeature : undefined;
+export const isFeatureScene = (scene: StudioScene | undefined): boolean => Boolean(scene && (sceneFeature(scene) || sceneVideoFeature(scene)));
 
+/**
+ * Scene eligibility check: image features require OpenDesign capabilities (matching ModelOverview),
+ * while video features stay provider-agnostic here so Workflows retain BYOK video models (Studio scopes via creationModels).
+ */
 export function supportsScene(model: Model, scene: StudioScene) {
   if (model.modality !== scene.modality) return false;
   const feature = sceneFeature(scene);
-  if (feature && !imageFeatureModel(feature, model)) return false;
+  if (feature && !imageFeatureSupported(feature, model)) return false;
+  const videoFeature = sceneVideoFeature(scene);
+  if (videoFeature && !videoFeatureCapable(videoFeature, model)) return false;
   if ('modelMode' in scene && model.mode !== scene.modelMode) return false;
   // Reference-only endpoints need an input that a prompt-only scene cannot supply.
   return needsImage(scene) ? modelReferenceLimit(model) > 0 : !/^(image|video)-to-/.test(model.mode);

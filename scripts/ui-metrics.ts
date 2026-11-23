@@ -40,11 +40,13 @@ function semanticRole(node: ts.JsxOpeningElement | ts.JsxSelfClosingElement) {
   return literal && ts.isStringLiteralLike(literal) ? literal.text : '';
 }
 
+const portablePath = (value: string) => value.split(path.sep).join('/');
+
 export async function scan(root: string) {
   const files = [...filesUnder(root, 'studio/src'), ...filesUnder(root, 'web'), ...filesUnder(root, 'mcp-ui')];
   const library = existsSync(path.join(root, 'packages/open-design-ui/registry.json')) ? 'packages/open-design-ui' : 'packages/design-system/components';
   const registry = JSON.parse(readFileSync(path.join(root, library, 'registry.json'), 'utf8'));
-  const origins = new Map<string, string>(registry.items.map((item: { source: string; export: string }) => [path.resolve(root, item.source), item.export]));
+  const origins = new Map<string, string>(registry.items.map((item: { source: string; export: string }) => [portablePath(path.resolve(root, item.source)), item.export]));
   const program = ts.createProgram(files.filter(file => !file.endsWith('.css')).map(file => path.join(root, file)), {
     target: ts.ScriptTarget.Latest, jsx: ts.JsxEmit.Preserve, moduleResolution: ts.ModuleResolutionKind.Bundler,
     paths: { 'open-design-ui/*': [path.join(root, library, '*')] }, allowJs: true, types: [], noLib: true,
@@ -86,7 +88,8 @@ export async function scan(root: string) {
           let symbol = checker.getSymbolAtLocation(ts.isPropertyAccessExpression(node.tagName) ? node.tagName.name : node.tagName);
           if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
           const origin = symbol?.valueDeclaration?.getSourceFile().fileName;
-          const component = origin && origins.get(origin);
+          // TypeScript reports forward slashes even on Windows, so both sides of the lookup are normalised.
+          const component = origin && origins.get(portablePath(origin));
           if (component && ['Button', 'IconButton', 'Slider'].includes(component) && component === symbol?.getName()) add(line, 'control', component === 'IconButton' ? 'button' : component.toLowerCase(), component, 'library', context);
         }
         for (const attr of node.attributes.properties) {

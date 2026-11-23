@@ -1,28 +1,54 @@
 import type { Model } from './gateway.ts';
+import { isOpenDesignProvider, modelCapabilities, type MediaCapabilities } from './model-capabilities.ts';
 
 /**
- * Image features composed from one OpenDesign edit request, per "OpenDesign API image model capabilities, tested"
- * (2026-11-20). Each feature names the models that produced the effect and how its prompt and parameters are built.
+ * Image features composed from one edit request. Each feature declares the model capabilities it requires
+ * (rather than a static model ID allowlist) so newly published models automatically participate once capable.
  */
 export type ImageFeatureId = 'remove-background' | 'relight' | 'character';
-type ImageFeature = {
-  models: readonly string[]; recommended: string; maxReferences: number;
-  parameters?: Record<string, unknown>; promptOptional: boolean;
-};
-/** The OpenDesign API key and the OpenDesign account reach the same media API. */
-const featureProviders = ['opendesign', 'account'];
-export const imageFeatures: Record<ImageFeatureId, ImageFeature> = {
-  'remove-background': { models: ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare'], recommended: 'gpt-image-2.6-sunburst', maxReferences: 1,
-    parameters: { background: 'transparent' }, promptOptional: true },
-  relight: { models: ['seedream-5.5', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'seedream-5.0-flash'], recommended: 'seedream-5.5', maxReferences: 1,
-    promptOptional: true },
-  // Seedream 5.5 stays listed: it accepts a single reference, and the reference guard removes it from two upward.
-  character: { models: ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'seedream-5.0-flash', 'seedream-5.5'], recommended: 'gpt-image-2.6-sunburst', maxReferences: 5,
-    promptOptional: false },
+export type ImageFeature = {
+  requires: (capabilities: MediaCapabilities) => boolean;
+  recommended: string;
+  maxReferences: number;
+  parameters?: Record<string, unknown>;
+  promptOptional: boolean;
+  actionLabel?: string;
 };
 
-export const imageFeatureModel = (feature: ImageFeatureId, model: Model) => model.modality === 'image'
-  && featureProviders.includes(model.provider) && imageFeatures[feature].models.includes(model.modelId);
+export const imageFeatures: Record<ImageFeatureId, ImageFeature> = {
+  'remove-background': {
+    requires: capabilities => capabilities.image.edit && capabilities.image.maxReferences >= 1 && capabilities.image.transparentBackground,
+    recommended: 'gpt-image-2.6-sunburst',
+    maxReferences: 1,
+    parameters: { background: 'transparent' },
+    promptOptional: true,
+    actionLabel: 'Remove background',
+  },
+  relight: {
+    requires: capabilities => capabilities.image.edit && capabilities.image.maxReferences >= 1,
+    recommended: 'seedream-5.5',
+    maxReferences: 1,
+    promptOptional: true,
+    actionLabel: 'Relight',
+  },
+  // Seedream 5.5 stays eligible for 1 reference; creationModels drops models whose reference limit is below the attached count.
+  character: {
+    requires: capabilities => capabilities.image.edit && capabilities.image.maxReferences >= 1,
+    recommended: 'gpt-image-2.6-sunburst',
+    maxReferences: 5,
+    promptOptional: false,
+  },
+};
+
+/** Pure capability check (provider-agnostic): whether a model can run this image feature. */
+export function imageFeatureCapable(feature: ImageFeatureId, model: Model): boolean {
+  return model.modality === 'image' && imageFeatures[feature].requires(modelCapabilities(model));
+}
+
+/** Studio feature eligibility: OpenDesign route plus the required model capabilities. */
+export function imageFeatureSupported(feature: ImageFeatureId, model: Model): boolean {
+  return isOpenDesignProvider(model.provider) && imageFeatureCapable(feature, model);
+}
 
 type LightChoice = { value: string; label: string; prompt: string };
 export const relightControls: readonly { key: 'direction' | 'temperature' | 'mood'; label: string; choices: readonly [LightChoice, ...LightChoice[]] }[] = [

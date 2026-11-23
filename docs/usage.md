@@ -168,7 +168,7 @@ To run the Studio, MCP and export in a container instead, follow the [Docker dep
 
 ## 本地文件与升级
 
-一个 `MOTION_DATA_DIR` 保存多个工程和当前选择。macOS新安装默认使用 `~/Library/Application Support/OpenDesign`，保留已有插件根目录 `.motion-data/` 的兼容路径；其他平台默认在插件根目录 `.motion-data/`，建议指定缓存目录外的稳定绝对路径，并定期备份 `project/`、`projects/`、`sessions/` 和 `projects.json`。一期 MCP 数据写入必须显式 projectId，不跟随其他会话全局选择。执行原生 CLI 前重新读取该项目目录。备份还应包含 phase1/versions、phase1/retained 和原生 history root，避免丢失历史媒体。
+一个 `MOTION_DATA_DIR` 保存多个工程和当前选择。macOS新安装默认使用 `~/Library/Application Support/OpenDesign`，保留已有插件根目录 `.motion-data/` 的兼容路径；其他平台默认在插件根目录 `.motion-data/`，建议指定缓存目录外的稳定绝对路径，并定期备份 `project/`、`projects/`、`sessions/` 和 `projects.json`。一期 MCP 数据写入必须显式 projectId，不跟随其他会话全局选择。执行原生 CLI 前重新读取该项目目录。备份还应包含 phase1/versions、phase1/retained 和原生 history root，避免丢失历史媒体。OpenDesign 账号登录不随数据目录走：同一台电脑上所有数据目录、安装方式和渠道共用一份按用户保存的登录（macOS `~/Library/Application Support/OpenDesign/account`，Windows `%LOCALAPPDATA%\OpenDesign\account`，Linux `~/.local/share/OpenDesign/account`），在 Studio 或任一 Agent 里登录、退出都对其他数据目录生效；`MOTION_ACCOUNT_DIR` 可指定别的账号目录，系统临时目录下的数据目录各自独立。
 
 ```text
 .motion-data/

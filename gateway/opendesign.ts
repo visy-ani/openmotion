@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Model } from '../shared/gateway.ts';
+import { openDesignImageReferenceCap } from '../shared/opendesign-models.ts';
 import { resolveGenerationParameters } from '../shared/generation-options.ts';
 import { apiJson, publicProviderFetch, ProviderError, retryRead, type Fetcher } from './network.ts';
 import type { ProviderAdapter, ProviderContext } from './providers.ts';
@@ -22,7 +23,7 @@ function inputImages(row: any): Partial<Model> {
   const capabilities = row.capabilities && typeof row.capabilities === 'object' && !Array.isArray(row.capabilities) ? row.capabilities as Record<string, unknown> : undefined;
   if (!capabilities) return {};
   const max = Number.isInteger(capabilities.max_input_images) && (capabilities.max_input_images as number) > 0 ? capabilities.max_input_images as number : undefined;
-  if (row.kind === 'image' && capabilities.edits === true) return { nativeOptions: capabilities, supportsImageReference: true, maxInputImages: max ?? 1 };
+  if (row.kind === 'image' && capabilities.edits === true) return { nativeOptions: capabilities, supportsImageReference: true, maxInputImages: max ?? openDesignImageReferenceCap(row.model) ?? 1 };
   // Only the first-frame role is implemented; the provider maximum stays visible in nativeOptions.
   if (row.kind === 'video' && max) return { nativeOptions: capabilities, maxInputImages: 1 };
   return { nativeOptions: capabilities, ...(row.kind === 'image' && capabilities.edits === false ? { supportsImageReference: false } : {}) };

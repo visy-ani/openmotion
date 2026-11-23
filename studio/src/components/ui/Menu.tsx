@@ -225,11 +225,34 @@ interface MenuItemProps extends StyledProps<typeof BaseMenu.Item> {
 /** One action. `disabled` items are skipped by the arrow keys, not just dimmed. */
 export function MenuItem({ shortcut, icon, tone, className, children, ...props }: MenuItemProps) {
   return (
-    <BaseMenu.Item className={cn(itemBase, tone === "danger" && itemDanger, className)} data-menu-tone={tone} {...props}>
-      {icon && <span className="motion-menu-icon" aria-hidden="true">{icon}</span>}
-      <span className="truncate">{children}</span>
-      {shortcut ? <MenuShortcut>{shortcut}</MenuShortcut> : null}
+    <BaseMenu.Item
+      className={cn(itemBase, "justify-start gap-2", tone === "danger" && itemDanger, className)}
+      data-menu-tone={tone}
+      {...props}
+    >
+      {icon && (
+        <span className="motion-menu-icon inline-flex shrink-0 items-center justify-center" aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate text-left">{children}</span>
+      {shortcut ? <MenuShortcut className="ml-4">{shortcut}</MenuShortcut> : null}
     </BaseMenu.Item>
+  );
+}
+
+/** Semantic group of menu items paired with an optional `MenuGroupLabel`. */
+export function MenuGroup({ className, ...props }: StyledProps<typeof BaseMenu.Group>) {
+  return <BaseMenu.Group className={cn("flex flex-col", className)} {...props} />;
+}
+
+/** Non-interactive section label inside a `MenuGroup`. */
+export function MenuGroupLabel({ className, ...props }: StyledProps<typeof BaseMenu.GroupLabel>) {
+  return (
+    <BaseMenu.GroupLabel
+      className={cn("px-2 pb-1 pt-1.5 text-step-10 font-medium text-text-4 select-none", className)}
+      {...props}
+    />
   );
 }
 

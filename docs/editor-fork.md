@@ -84,34 +84,36 @@ UI 主题不会写入影片 HTML、CSS、GSAP 或 Studio 编辑数据，预览�
 
 ## Workspace page routes
 
-The application shell reads its destination from the URL query. The native editor continues to own `#project/<id>?…`, including composition, playhead and selection state. Shell navigation preserves that hash, project/session identity and embedding/tracking parameters.
+The application shell uses React Router Data Router (`studio/src/router/createAppRouter.tsx`) with canonical semantic pathnames. Legacy `/?page=...`, bare `/`, and `/?project=...#project/...` bookmarks redirect in place via `LegacyQueryRedirect.tsx`. The native editor continues to own `#project/<id>?…`, including composition, playhead and selection state. Shell navigation preserves that hash, project/session identity and orthogonal embedding/overlay/tracking query parameters. See [Studio routing and lazy-loading architecture](routing.md) for the complete governance and prefix rules.
 
-| Destination | Query parameters |
+| Destination | Canonical path and query parameters |
 | --- | --- |
-| Current editor | Project/session URL, project hash or `page=editor` to resume the active project |
-| Motion Studio | `page=motion` opens the Motion Studio banner and template catalog. Open Motion Editor opens the first available project, New project starts a blank project, and Template library opens the global catalog with the selected collection. The project sidebar opens in the editor. |
-| Shorts, Marketing and Explainer Studios | `page=shorts`, `page=marketing` or `page=explainer`. Add a supported `scene` to open the generator. A registered `skill` restores its brief on return. |
-| Model overview | `page=model&model=<provider-qualified-id>` lists compatible scenes and links to its provider and generation setup. |
-| Model hub | `page=model-hub&hub=<hub-id>`, for example `hub=gemini-4`. Opens a model family's landing page from its Explore spotlight slide: community videos with their detail preview, plus sign-in and own-key paths. It is a standalone page, so a session's first artifact does not return the viewer to the editor. An unknown `hub` shows a page-unavailable notice. |
-| 3D Studio | `page=3d` shows Coming soon and six 3D creative Skills. `page=3d&skill=three-js` opens a brief to copy to a connected Agent, which builds the editable scene. Direct `scene=text-to-video` and `scene=image-to-video` links show the Coming soon fallback; in-Studio generation is unavailable. |
-| Asset detail | `page=assets&asset=<assetId>&version=<versionId>` opens the selected local version |
-| Explore | The workspace root or `page=explore` opens featured scenes and template previews. Optional filters such as `community=3d-motion` or `medium=video` restore discovery context |
-| Scene landing page | `page=create&scene=image-edit` opens the focused generator. The optional `model` identifies the provider and model. |
-| Creative studio | `page=design`, `page=cinema`, or `page=sound` with a `scene` and optional provider-qualified `model`. For example, `page=cinema&scene=shot-image` opens an image composer inside Cinema. |
-| Asset workspace | `page=assets` opens the shared asset library independently of the retained project |
-| MCP onboarding | `page=mcp&host=codex`; `setup=manual` opens manual configuration |
-| Settings | `page=settings&section=general` |
-| MCP setup in Settings | `page=settings&section=mcp&host=codex`; `setup=manual` opens manual configuration in the settings content pane |
-| Provider detail | `page=settings&section=providers&provider=openai` |
-| Template library | `templates=1` |
-| Creators and credited works | `templates=1&view=creators`, optionally with `creator=<credit-id>` and `template=<catalog-id>`. The underlying workspace survives closing the gallery. |
+| Current editor | `/editor/<projectId>?session=<sessionId>#project/<projectId>?…` or `/editor` to resume the active project |
+| Motion Studio | `/motion` opens the Motion Studio banner and template catalog. Open Motion Editor opens the first available project, New project starts a blank project, and Template library opens the global catalog with the selected collection. The project sidebar opens in the editor. |
+| Shorts, Marketing, Explainer and Game Studios | `/studios/shorts`, `/studios/marketing`, `/studios/explainer` or `/studios/game`. Add `/<scene>` to open a supported generator, `?skill=<id>` for a brief, or `?game=<id>` for a Game Studio project. |
+| Model overview | `/models/<provider-qualified-id>` lists compatible scenes and links to its provider and generation setup. |
+| Model hub | `/model-hub/<hub-id>`, for example `/model-hub/gemini-4`. Opens a model family's landing page from its Explore spotlight slide: community videos with their detail preview, plus sign-in and own-key paths. It is a standalone page, so a session's first artifact does not return the viewer to the editor. An unknown `hub` shows a page-unavailable notice. |
+| 3D Studio | `/studios/3d` shows Coming soon and six 3D creative Skills. `/studios/3d?skill=three-js` opens a brief to copy to a connected Agent, which builds the editable scene. Direct `/studios/3d/text-to-video` and `/studios/3d/image-to-video` links show the Coming soon fallback; in-Studio generation is unavailable. |
+| Workflows / Scenarios | `/scenarios` (optional `?category=...`) and `/scenarios/<id>` (optional `?run=...&step=...&mode=agent`) |
+| Asset workspace & detail | `/assets` opens the shared asset library independently of the retained project; `/assets/<assetId>?version=<versionId>` opens a selected local version |
+| Brand Kit | `/brand-kit` (official collection) or `/brand-kit/<kitId>` (`mine`, `new`, or a saved kit ID) |
+| Skills library | `/skills` (optional `?category=...`) or `/skills/<skillId>` |
+| Explore | `/explore` (bare `/` redirects here) opens featured scenes and template previews. Optional filters such as `?community=3d-motion` or `?medium=video` restore discovery context |
+| Scene landing page | `/create/image-edit` opens the focused generator. Optional `?model=<provider-qualified-id>` selects the provider and model. |
+| Creative studio | `/design/<scene>` (or `/design/projects/<id>`), `/cinema` (or `/cinema/<scene>`), `/sound` (or `/sound/<tab>`), and `/audio/<tab>` with optional `?model=<provider-qualified-id>`. |
+| MCP onboarding | `/mcp-setup?host=codex`; add `&setup=manual` for manual configuration |
+| Settings | `/settings/<section>` (e.g. `/settings/general`) |
+| MCP setup in Settings | `/settings/mcp?host=codex`; add `&setup=manual` for manual configuration in the settings content pane |
+| Provider detail | `/settings/providers?provider=openai` |
+| Template library | `?templates=1` overlay on any route (or `/?templates=1&embed=1` for host embed) |
+| Creators and credited works | `/explore?templates=1&view=creators`, optionally with `creator=<credit-id>` and `template=<catalog-id>`. The underlying workspace survives closing the gallery. |
 | Template preview | `template=<catalog-id>` opens a preview over the current page. Inside the template library the URL also keeps `templates=1`. |
 
 The [studio catalogue](../shared/studio-catalog.ts) supplies Explore, header links and scene tabs. To add a workspace using the media composer, register its ID and ordered scene IDs there. Each scene declares its entry surface (focused landing page or owning studio), media type and any reference-image or model-mode requirement. The same predicate filters discovery and generation. Both surfaces share an in-memory draft for each studio/scene pair. An unavailable pinned model keeps its identity and requires configuration or an explicit replacement. Provide a poster and prompt in the [scene showcase](../studio/src/motion/sceneShowcase.ts). The canvas presents stills, while reference, video and audio scenes offer controls beside a guide and results. A workspace can combine image and video scenes under one URL.
 
-Settings sections are `account`, `subscription`, `providers`, `models`, `local`, `general`, `appearance`, `privacy`, `help` and `about`. MCP uses the dedicated page; `section=mcp` is also readable. Client IDs are `codex`, `claude`, `cursor`, `deepseek`, `desktop`, `chatgpt` and `mcp`. Template parameters may accompany a settings/MCP page, allowing the library to close back to that destination. Existing project, session and project-free library links remain supported.
+Settings sections are `account`, `subscription`, `providers`, `models`, `local`, `general`, `appearance`, `privacy`, `help` and `about`. MCP uses the dedicated `/mcp-setup` page; `/settings/mcp` keeps MCP inside the settings center. Client IDs are `codex`, `claude`, `cursor`, `deepseek`, `desktop`, `chatgpt` and `mcp`. Template parameters may accompany any page, allowing the library to close back to that destination. Existing legacy query, project, session and project-free library links remain supported.
 
-`workspacePageRouting.ts` parses and builds shell destinations; `workspaceHistory.ts` writes same-origin history entries and notifies the shell. `useWorkspace.ts` handles browser history, waits for saves only when changing projects or leaving the template library, and ignores stale pending transitions. Owned history entries retain an index through editor hash updates so a refused transition can return with `history.go` without truncating Forward history. An older entry without an index uses URL replacement as its recovery fallback. Repeated navigation to the current URL does not add an entry.
+`workspacePageRouting.ts` parses and builds semantic shell destinations; `workspaceHistory.ts` bridges same-origin navigation through React Router's `location.state` and history index; `useWorkspaceBlocker.ts` guards browser Back/Forward (`POP`) navigation when changing projects or leaving a busy template library without truncating Forward history. Repeated navigation to the current URL does not add an entry.
 
 The browser provides Back and Forward across the editor, settings, MCP onboarding and galleries. Template previews also provide close, previous-template and next-template actions. Each workspace entry carries a visit ID and index in `history.state` so the save guard can restore an entry from the same visit.
 

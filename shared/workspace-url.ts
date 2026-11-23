@@ -21,7 +21,7 @@ export function isWorkspaceSettingsPage(search: string, hash = '') {
   if (page === 'model') return Boolean(query.get('model'));
   if (page === 'model-hub') return Boolean(query.get('hub'));
   if (page === 'create') return Boolean(findLandingScene(query.get('scene')));
-  return page === 'settings' || page === 'mcp' || page === 'assets' || page === 'skills' || page === 'brand-kit' || page === 'explore' || page === 'motion' || page === 'audio' || Boolean(findMediaStudio(page) || findTechniqueStudio(page));
+  return page === 'settings' || page === 'mcp' || page === 'assets' || page === 'skills' || page === 'brand-kit' || page === 'explore' || page === 'motion' || page === 'audio' || page === 'agent' || page === 'scenario' || page === 'scenarios' || Boolean(findMediaStudio(page) || findTechniqueStudio(page));
 }
 export function workspacePresentation(search: string): WorkspacePresentation {
   const query = new URLSearchParams(search), embedded = query.get('embed') === '1';
@@ -29,10 +29,13 @@ export function workspacePresentation(search: string): WorkspacePresentation {
 }
 export function sessionPath(sessionId: string, projectId?: string, options: { openArtifact?: boolean; embedded?: boolean } = {}) {
   const query = new URLSearchParams({ session: sessionId });
-  if (projectId) query.set('project', projectId);
   if (options.openArtifact) query.set('openArtifact', '1');
   if (options.embedded) query.set('embed', '1');
-  return '/?' + query + (projectId ? '#project/' + encodeURIComponent(projectId) : '');
+  if (projectId) {
+    const encoded = encodeURIComponent(projectId);
+    return `/editor/${encoded}?${query}#project/${encoded}`;
+  }
+  return `/editor?${query}`;
 }
 export function preservePresentation(target: string, search: string) {
   const url = new URL(target, 'http://workspace.local'), current = new URLSearchParams(search);
@@ -57,7 +60,7 @@ export function resolveProviderSetupEntry(entry?: string): ProviderSetupEntry {
 }
 
 function workspacePagePreview(origin: string, target: 'templates' | 'providers', options: { embedded?: boolean; presentation?: string; entry?: string; attributeEntry?: boolean }) {
-  const query = new URLSearchParams(target === 'providers' ? { page: 'settings', section: 'providers' } : { templates: '1' });
+  const query = new URLSearchParams(target === 'providers' ? undefined : { templates: '1' });
   if (target === 'providers') {
     const entry = resolveProviderSetupEntry(options.entry);
     if (entry === 'agent_media_signed_out' || entry === 'agent_media_upgrade_free' || entry === 'agent_media_upgrade_go' || entry === 'agent_media_balance_low') {
@@ -66,7 +69,10 @@ function workspacePagePreview(origin: string, target: 'templates' | 'providers',
     if (options.attributeEntry !== false) query.set('entry_from', entry);
   }
   if (options.embedded !== false) query.set('embed', '1');
-  const previewUrl = origin + '/?' + query;
+  const serialized = query.toString();
+  const previewUrl = target === 'providers'
+    ? `${origin}/settings/providers${serialized ? `?${serialized}` : ''}`
+    : `${origin}/?${serialized}`;
   const presentation = options.presentation ?? 'foreground';
   const background = presentation === 'background';
   return { target, previewUrl, projectCreated: false, openedByHost: false,
