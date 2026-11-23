@@ -9,6 +9,7 @@ import { AccountRequestError, OpenDesignAccount, type OpenDesignWorkspaceInfo } 
 import { AssetLibrary, atomicAssetJson } from '../gateway/asset-library.ts';
 import {
   cloudProjectIdFor,
+  shareViewerUrlForTarget,
   WebPublishService,
   type WebPublishAccountClient,
 } from '../gateway/web-publish.ts';
@@ -169,6 +170,11 @@ test('WebPublishService publishes design, game, and standalone single-file HTML 
     assert.equal(gameRes.publication.cloudProjectId, expectedGameCloudId);
     assert.equal(gameRes.publication.fileCount, 2);
     assert.equal(mock.stagedFilesByPush[1].metadata.targetKind, 'game');
+    // Game shares open the cloud viewer without comments; other kinds keep comments.
+    assert.equal(new URL(gameRes.url ?? '').searchParams.get('comments'), 'off');
+    assert.equal(new URL(designRes.url ?? '').searchParams.get('comments'), null);
+    const gameStatus = await service.status({ kind: 'game', id: 'arcade-shooter', entryPath: 'index.html' });
+    assert.equal(new URL(gameStatus.active?.url ?? '').searchParams.get('comments'), 'off');
 
     // 3. Standalone single HTML file is staged cleanly as entryPath="index.html"
     const htmlRes = await service.publish({
@@ -182,6 +188,7 @@ test('WebPublishService publishes design, game, and standalone single-file HTML 
     assert.equal(htmlRes.publication.targetKind, 'html');
     assert.equal(htmlRes.publication.fileCount, 1);
     assert.ok(htmlRes.url?.startsWith('https://open-design.app/artifact/'));
+    assert.equal(new URL(htmlRes.url ?? '').searchParams.get('comments'), null);
 
     // 4. Unified catalog listAll returns all three target kinds
     const listing = await service.listAll();
@@ -191,6 +198,10 @@ test('WebPublishService publishes design, game, and standalone single-file HTML 
       listing.publications.map(p => p.targetKind).sort(),
       ['design', 'game', 'html'],
     );
+    for (const publication of listing.publications) {
+      const comments = new URL(publication.url ?? '').searchParams.get('comments');
+      assert.equal(comments, publication.targetKind === 'game' ? 'off' : null);
+    }
 
     // 5. Legacy design-projects/deployments/<id>.json fallback works seamlessly
     const legacyId = '22222222-2222-4222-8222-222222222222';
@@ -565,7 +576,7 @@ test('WebPublishService migrates legacy cloud-shares records and preserves cloud
     });
     assert.equal(updated.publication.slug, 'legacy-cloud-slug');
     assert.equal(updated.publication.cloudProjectId, `om-game-${created.id}`);
-    assert.equal(updated.url, `https://open-design.app/artifact/om-game-${created.id}/legacy-cloud-slug`);
+    assert.equal(updated.url, `https://open-design.app/artifact/om-game-${created.id}/legacy-cloud-slug?comments=off`);
   }));
 
 test('OpenDesignAccount Vela JSON error envelope parsing and signed-out workspace guard', async () => {
@@ -671,3 +682,13 @@ test('WebPublish stops previous slug on new_link rotation and allows unpublish/s
     'unpublish after project deletion must call share stop on the persisted slug',
   );
 }));
+
+test('shareViewerUrlForTarget hides comments only for game shares and is idempotent', () => {
+  const base = 'https://open-design.app/artifact/p1/slug-1';
+  assert.equal(shareViewerUrlForTarget('game', base), `${base}?comments=off`);
+  assert.equal(shareViewerUrlForTarget('game', `${base}?comments=off`), `${base}?comments=off`);
+  assert.equal(shareViewerUrlForTarget('design', base), base);
+  assert.equal(shareViewerUrlForTarget('html', base), base);
+  assert.equal(shareViewerUrlForTarget('motion', base), base);
+  assert.equal(shareViewerUrlForTarget('game', null), null);
+});

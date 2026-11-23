@@ -148,6 +148,25 @@ export function verifiedShareUrl(rawUrl: unknown, projectId: string, slug: strin
   }
 }
 
+/**
+ * Game shares are meant to be played, not reviewed: the cloud share viewer
+ * hides its comments rail, comment dock and mobile comments when the link
+ * carries `comments=off`. Other target kinds keep the default review viewer.
+ */
+export const SHARE_VIEWER_COMMENTS_OFF_PARAM = 'comments';
+export const SHARE_VIEWER_COMMENTS_OFF_VALUE = 'off';
+
+export function shareViewerUrlForTarget(kind: WebPublishTargetKind, url: string | null): string | null {
+  if (!url || kind !== 'game') return url;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set(SHARE_VIEWER_COMMENTS_OFF_PARAM, SHARE_VIEWER_COMMENTS_OFF_VALUE);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function parseShareLinkFromRecord(
   record: Record<string, unknown>,
   projectId: string,
@@ -325,6 +344,15 @@ export class WebPublishService {
   }
 
   private async readState(kind: WebPublishTargetKind, targetId: string): Promise<StoredPublishFile> {
+    const state = await this.readStoredState(kind, targetId);
+    if (kind !== 'game') return state;
+    for (const record of Object.values(state.publications)) {
+      record.url = shareViewerUrlForTarget(kind, record.url);
+    }
+    return state;
+  }
+
+  private async readStoredState(kind: WebPublishTargetKind, targetId: string): Promise<StoredPublishFile> {
     const primary = this.stateFile(kind, targetId);
     if (!existsSync(primary)) {
       if (kind === 'design' && existsSync(this.legacyStateFile(targetId))) {
@@ -542,7 +570,10 @@ export class WebPublishService {
           );
           if (remote.status === 'active' || remote.status === 'stopped') {
             const nextStatus = remote.status === 'stopped' ? 'stopped' : 'published';
-            const refreshedUrl = parseShareLinkFromRecord(remote, remoteProjectId, current.slug) ?? current.url;
+            const refreshedUrl = shareViewerUrlForTarget(
+              target.kind,
+              parseShareLinkFromRecord(remote, remoteProjectId, current.slug) ?? current.url,
+            );
             await withProcessLock(this.lockFile(target.kind, target.id), async () => {
               const latest = await this.readState(target.kind, target.id);
               const entry = latest.publications[targetEntry];
@@ -705,9 +736,11 @@ export class WebPublishService {
       if (resumedRecord.status !== 'active') {
         throw new Error('DEPLOY_FAILED: OpenDesign could not resume the stopped share link');
       }
-      const resumedUrl =
+      const resumedUrl = shareViewerUrlForTarget(
+        target.kind,
         parseShareLinkFromRecord(resumedRecord, remoteProjectId, existingPublication.slug)
-        ?? existingPublication.url;
+          ?? existingPublication.url,
+      );
       const resumedPublication: WebPublicationRecord = {
         ...existingPublication,
         cloudProjectId: remoteProjectId,
@@ -894,7 +927,10 @@ export class WebPublishService {
         typeof publishResult.publishedAt === 'number' && Number.isSafeInteger(publishResult.publishedAt)
           ? publishResult.publishedAt
           : Date.now();
-      const shareUrl = parseShareLinkFromRecord(publishResult, cloudProjectId, reservation.slug);
+      const shareUrl = shareViewerUrlForTarget(
+        target.kind,
+        parseShareLinkFromRecord(publishResult, cloudProjectId, reservation.slug),
+      );
 
       const record: WebPublicationRecord = {
         schemaVersion: 1,
@@ -999,6 +1035,7 @@ export class WebPublishService {
     const collected = new Map<string, WebPublicationRecord>();
 
     const recordCandidate = (normalized: WebPublicationRecord) => {
+      normalized.url = shareViewerUrlForTarget(normalized.targetKind, normalized.url);
       const key = `${normalized.targetKind}:${normalized.targetId}:${normalized.filePath}`;
       const prev = collected.get(key);
       if (!prev || normalized.updatedAt >= prev.updatedAt) {
