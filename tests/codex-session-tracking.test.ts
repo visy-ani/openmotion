@@ -524,3 +524,198 @@ test('disabling telemetry preference or setting OPENMOTION_TELEMETRY=0 purges qu
   assert.equal(requests, 0);
   assert.equal(existsSync(queueFile), false);
 });
+
+test('attributes per-turn models from rollout turn_context when Codex switches models mid-thread', async t => {
+  const root = await tempDir(t, 'om-codex-model-switch-');
+  const dataDir = path.join(root, 'motion-data');
+  const codexHome = path.join(root, 'codex-home');
+  const sessionsDir = path.join(codexHome, 'sessions', '2026', '11', '23');
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  await mkdir(sessionsDir, { recursive: true });
+  await mkdir(dataDir, { recursive: true });
+
+  withTrackingTestEnv(t, {
+    CODEX_HOME: codexHome,
+    OPENMOTION_TELEMETRY: undefined,
+    DO_NOT_TRACK: undefined,
+    OPENMOTION_TRACKING_ENV: 'test',
+    OPENMOTION_TRACKING_TEST_RUN_ID: crypto.randomUUID(),
+    OPENMOTION_POSTHOG_HOST: 'http://127.0.0.1:59999',
+    OPENMOTION_POSTHOG_KEY: 'phc_test_codex_model_switch_12345',
+  });
+
+  const { stateDb, historyDb } = createCodexDatabases(codexHome);
+  t.after(() => {
+    try { stateDb.close(); } catch { /* closed */ }
+    try { historyDb.close(); } catch { /* closed */ }
+  });
+  stateDb.exec('ALTER TABLE threads ADD COLUMN rollout_path TEXT');
+
+  const threadId = '01a20000-1111-7000-8000-000000000594';
+  const rolloutPath = path.join(sessionsDir, `rollout-${threadId}.jsonl`);
+  await writeFile(rolloutPath, [
+    JSON.stringify({ type: 'session_meta', payload: { id: threadId } }),
+    JSON.stringify({ type: 'event_msg', payload: { type: 'task_started', turn_id: 'turn_0' } }),
+    JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn_0', model: 'gpt-6.1-sol', effort: 'low' } }),
+    JSON.stringify({ type: 'event_msg', payload: { type: 'task_complete', turn_id: 'turn_0' } }),
+    JSON.stringify({ type: 'event_msg', payload: { type: 'task_started', turn_id: 'turn_1' } }),
+    JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn_1', model: 'gpt-6.1-terra', effort: 'high' } }),
+    JSON.stringify({ type: 'event_msg', payload: { type: 'task_complete', turn_id: 'turn_1' } }),
+  ].join('\n') + '\n', 'utf8');
+
+  const nowMs = Date.now();
+  const nowSec = Math.floor(nowMs / 1000);
+  // Thread row's current model was overwritten to gpt-6.1-terra when Turn 1 ran.
+  stateDb.prepare(
+    'INSERT INTO threads (id, source, model_provider, cwd, tokens_used, cli_version, model, reasoning_effort, created_at, updated_at, created_at_ms, updated_at_ms, rollout_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(threadId, 'cli', 'openai', root, 500, '0.169.1', 'gpt-6.1-terra', 'high', nowSec - 10, nowSec, nowMs - 10_000, nowMs, rolloutPath);
+
+  historyDb.prepare('INSERT INTO thread_turns VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    threadId, 'turn_0', 1, 'completed', null, nowSec - 10, nowSec - 6, 4000, 3,
+  );
+  historyDb.prepare('INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    threadId, 'turn_0', 'u0', 2, nowMs - 9500, 'userMessage', nowMs - 9500, nowMs - 9500,
+    JSON.stringify({ type: 'userMessage', content: [{ type: 'text', text: 'Draft a 10s launch storyboard first.' }] }),
+  );
+
+  historyDb.prepare('INSERT INTO thread_turns VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    threadId, 'turn_1', 4, 'completed', null, nowSec - 5, nowSec - 1, 4000, 6,
+  );
+  historyDb.prepare('INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    threadId, 'turn_1', 'u1', 5, nowMs - 4500, 'userMessage', nowMs - 4500, nowMs - 4500,
+    JSON.stringify({ type: 'userMessage', content: [{ type: 'text', text: 'Call openmotion_list_skills now.' }] }),
+  );
+
+  await recordCodexThreadActivity(
+    dataDir,
+    { threadId, turnId: 'turn_1', model: 'gpt-6.1-terra', hostVersion: '0.169.1' },
+    { codexHome, scheduleTimer: false, now: nowMs },
+  );
+
+  const batches: Array<Array<Record<string, any>>> = [];
+  const res = await syncActiveCodexThreads(dataDir, {
+    now: nowMs + 1000,
+    fetch: async (_url, init) => {
+      batches.push(JSON.parse(String(init?.body)).batch);
+      return Response.json({ status: 'Ok' });
+    },
+  });
+
+  assert.equal(res.syncedTurns, 2);
+  assert.equal(batches.length, 1);
+  assert.equal(batches[0]![0]!.properties.$ai_model, 'gpt-6.1-sol');
+  assert.equal(batches[0]![0]!.properties.reasoning_effort, 'low');
+  assert.equal(batches[0]![1]!.properties.$ai_model, 'gpt-6.1-terra');
+  assert.equal(batches[0]![1]!.properties.reasoning_effort, 'high');
+});
+
+test('enforces the 5-failure eviction cap across 19, 20, and 21-turn backlogs while draining 20+1 pages when healthy', async t => {
+  const { mkdir } = await import('node:fs/promises');
+  const nowMs = Date.now();
+  const nowSec = Math.floor(nowMs / 1000);
+
+  for (const turnCount of [19, 20, 21]) {
+    const root = await tempDir(t, `om-codex-cap-${turnCount}-`);
+    const dataDir = path.join(root, 'motion-data');
+    const codexHome = path.join(root, 'codex-home');
+    await mkdir(codexHome, { recursive: true });
+    await mkdir(dataDir, { recursive: true });
+
+    withTrackingTestEnv(t, {
+      CODEX_HOME: codexHome,
+      OPENMOTION_TELEMETRY: undefined,
+      DO_NOT_TRACK: undefined,
+      OPENMOTION_TRACKING_ENV: 'test',
+      OPENMOTION_TRACKING_TEST_RUN_ID: crypto.randomUUID(),
+      OPENMOTION_POSTHOG_HOST: 'http://127.0.0.1:59999',
+      OPENMOTION_POSTHOG_KEY: 'phc_test_codex_retry_cap_12345',
+    });
+
+    const { stateDb, historyDb } = createCodexDatabases(codexHome);
+    t.after(() => {
+      try { stateDb.close(); } catch { /* closed */ }
+      try { historyDb.close(); } catch { /* closed */ }
+    });
+
+    const threadId = `01a20000-2222-7000-8000-0000000000${turnCount}`;
+    stateDb.prepare('INSERT INTO threads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      threadId, 'cli', 'openai', root, 1000, '0.169.1', 'gpt-5-codex', 'medium', nowSec - 60, nowSec, nowMs - 60_000, nowMs,
+    );
+    for (let i = 0; i < turnCount; i++) {
+      const ord = i * 2 + 1;
+      historyDb.prepare('INSERT INTO thread_turns VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+        threadId, `turn_${i}`, ord, 'completed', null, nowSec - 60 + i, nowSec - 59 + i, 1000, ord + 1,
+      );
+      historyDb.prepare('INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+        threadId, `turn_${i}`, `u_${i}`, ord + 1, nowMs - 60_000 + i * 1000, 'userMessage', nowMs - 60_000 + i * 1000, nowMs - 60_000 + i * 1000,
+        JSON.stringify({ type: 'userMessage', content: [{ type: 'text', text: `Turn ${i}` }] }),
+      );
+    }
+
+    await recordCodexThreadActivity(dataDir, { threadId }, { codexHome, scheduleTimer: false, now: nowMs });
+    let attempts = 0;
+    const always503: typeof fetch = async () => {
+      attempts += 1;
+      return new Response('Service Unavailable', { status: 503 });
+    };
+
+    for (let run = 1; run <= 7; run++) {
+      const result = await syncActiveCodexThreads(dataDir, { fetch: always503, now: nowMs + run * 1000 });
+      if (run < 5) {
+        assert.equal(result.activeThreads, 1, `turnCount=${turnCount} run=${run}`);
+      } else {
+        assert.equal(result.activeThreads, 0, `turnCount=${turnCount} run=${run}`);
+      }
+    }
+    assert.equal(attempts, 5, `turnCount=${turnCount} must stop sending after 5 consecutive 503 failures`);
+    assert.equal(existsSync(path.join(dataDir, 'tracking/active-codex-threads.json')), false);
+  }
+
+  // Healthy 200 OK control for 21 turns (even past idleSealMs): drains 20 + 1 without duplicates and then seals.
+  const okRoot = await tempDir(t, 'om-codex-drain-21-');
+  const okData = path.join(okRoot, 'motion-data');
+  const okHome = path.join(okRoot, 'codex-home');
+  await mkdir(okHome, { recursive: true });
+  await mkdir(okData, { recursive: true });
+  withTrackingTestEnv(t, {
+    CODEX_HOME: okHome,
+    OPENMOTION_TELEMETRY: undefined,
+    DO_NOT_TRACK: undefined,
+    OPENMOTION_TRACKING_ENV: 'test',
+    OPENMOTION_TRACKING_TEST_RUN_ID: crypto.randomUUID(),
+    OPENMOTION_POSTHOG_HOST: 'http://127.0.0.1:59999',
+    OPENMOTION_POSTHOG_KEY: 'phc_test_codex_drain_token_12345',
+  });
+  const { stateDb: okSdb, historyDb: okHdb } = createCodexDatabases(okHome);
+  t.after(() => {
+    try { okSdb.close(); } catch { /* closed */ }
+    try { okHdb.close(); } catch { /* closed */ }
+  });
+  const okThread = '01a20000-3333-7000-8000-000000000021';
+  okSdb.prepare('INSERT INTO threads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    okThread, 'cli', 'openai', okRoot, 1000, '0.169.1', 'gpt-5-codex', 'medium', nowSec - 60, nowSec, nowMs - 60_000, nowMs,
+  );
+  for (let i = 0; i < 21; i++) {
+    const ord = i * 2 + 1;
+    okHdb.prepare('INSERT INTO thread_turns VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      okThread, `turn_${i}`, ord, 'completed', null, nowSec - 60 + i, nowSec - 59 + i, 1000, ord + 1,
+    );
+    okHdb.prepare('INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      okThread, `turn_${i}`, `u_${i}`, ord + 1, nowMs - 60_000 + i * 1000, 'userMessage', nowMs - 60_000 + i * 1000, nowMs - 60_000 + i * 1000,
+      JSON.stringify({ type: 'userMessage', content: [{ type: 'text', text: `Turn ${i}` }] }),
+    );
+  }
+  await recordCodexThreadActivity(okData, { threadId: okThread }, { codexHome: okHome, scheduleTimer: false, now: nowMs });
+  const receivedIndices: number[] = [];
+  const okFetch: typeof fetch = async (_url, init) => {
+    for (const ev of JSON.parse(String(init?.body)).batch) receivedIndices.push(ev.properties.turn_index);
+    return Response.json({ status: 'Ok' });
+  };
+  const page1 = await syncActiveCodexThreads(okData, { fetch: okFetch, now: nowMs + 35 * 60_000 });
+  assert.equal(page1.syncedTurns, 20);
+  assert.equal(page1.activeThreads, 1);
+  const page2 = await syncActiveCodexThreads(okData, { fetch: okFetch, now: nowMs + 36 * 60_000 });
+  assert.equal(page2.syncedTurns, 1);
+  assert.equal(page2.activeThreads, 0);
+  assert.deepEqual(receivedIndices, Array.from({ length: 21 }, (_, i) => i));
+});

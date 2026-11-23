@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -37,6 +37,7 @@ type ActiveCodexThread = {
   lastUpdatedAtMs: number;
   hostVersion?: string;
   lastKnownModel?: string;
+  turnModels?: Record<string, string>;
   projectIds: string[];
   skillsActivated: string[];
   hasCompletedExport: boolean;
@@ -178,6 +179,13 @@ function validActiveThread(value: unknown): value is ActiveCodexThread {
     && Number.isFinite(entry.lastUpdatedAtMs)
     && (entry.hostVersion === undefined || (typeof entry.hostVersion === 'string' && VERSION_PATTERN.test(entry.hostVersion)))
     && (entry.lastKnownModel === undefined || (typeof entry.lastKnownModel === 'string' && entry.lastKnownModel.length <= 96))
+    && (entry.turnModels === undefined || (
+      typeof entry.turnModels === 'object'
+      && entry.turnModels !== null
+      && !Array.isArray(entry.turnModels)
+      && Object.entries(entry.turnModels).length <= 64
+      && Object.entries(entry.turnModels).every(([k, v]) => SHORT_ID_PATTERN.test(k) && typeof v === 'string' && v.length > 0 && v.length <= 96)
+    ))
     && Array.isArray(entry.projectIds) && entry.projectIds.every(validProjectId)
     && Array.isArray(entry.skillsActivated) && entry.skillsActivated.every(s => typeof s === 'string' && SKILL_SLUG_PATTERN.test(s))
     && typeof entry.hasCompletedExport === 'boolean'
@@ -340,6 +348,15 @@ export async function recordCodexThreadActivity(
     const threads = await readActiveThreadsUnlocked(directory);
     const existing = threads[meta.threadId];
     const lastKnownModel = meta.model ?? existing?.lastKnownModel;
+    let turnModels = existing?.turnModels ? { ...existing.turnModels } : undefined;
+    if (meta.turnId && meta.model) {
+      turnModels = turnModels ?? {};
+      turnModels[meta.turnId] = meta.model;
+      const keys = Object.keys(turnModels);
+      if (keys.length > 64) {
+        for (const dropKey of keys.slice(0, keys.length - 64)) delete turnModels[dropKey];
+      }
+    }
     threads[meta.threadId] = {
       threadId: meta.threadId,
       codexHome,
@@ -349,6 +366,7 @@ export async function recordCodexThreadActivity(
       lastUpdatedAtMs: Math.max(existing?.lastUpdatedAtMs ?? 0, now),
       ...(meta.hostVersion ?? existing?.hostVersion ? { hostVersion: meta.hostVersion ?? existing?.hostVersion } : {}),
       ...(lastKnownModel ? { lastKnownModel } : {}),
+      ...(turnModels && Object.keys(turnModels).length > 0 ? { turnModels } : {}),
       projectIds: mergeBoundedStrings(existing?.projectIds ?? [], projectIds),
       skillsActivated: mergeBoundedStrings(existing?.skillsActivated ?? [], skillsFromUri),
       hasCompletedExport: Boolean(existing?.hasCompletedExport || options.exportCompleted),
@@ -538,11 +556,145 @@ function normalizeCodexSource(raw: unknown): string {
   return 'other';
 }
 
+type RolloutTurnContextEntry = {
+  ordinal: number;
+  turnId?: string;
+  model?: string;
+  reasoningEffort?: string;
+};
+
+const MAX_ROLLOUT_FILE_BYTES = 128 * 1024 * 1024;
+const MAX_ROLLOUT_LINE_BYTES = 64 * 1024;
+
+function readRolloutTurnContexts(
+  codexHome: string,
+  rawRolloutPath: unknown,
+): { byTurnId: Map<string, RolloutTurnContextEntry>; byOrdinal: RolloutTurnContextEntry[] } {
+  const byTurnId = new Map<string, RolloutTurnContextEntry>();
+  const byOrdinal: RolloutTurnContextEntry[] = [];
+  if (typeof rawRolloutPath !== 'string' || !rawRolloutPath.trim()) return { byTurnId, byOrdinal };
+
+  let fd: number | undefined;
+  try {
+    const trimmed = rawRolloutPath.trim();
+    const candidate = path.isAbsolute(trimmed) ? path.normalize(trimmed) : path.resolve(codexHome, trimmed);
+    const realRoot = realpathSync(codexHome);
+    const realFile = realpathSync(candidate);
+    if (realFile !== realRoot && !realFile.startsWith(realRoot + path.sep)) {
+      return { byTurnId, byOrdinal };
+    }
+    fd = openSync(realFile, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const info = fstatSync(fd);
+    if (!info.isFile() || info.size <= 0 || info.size > MAX_ROLLOUT_FILE_BYTES) {
+      return { byTurnId, byOrdinal };
+    }
+
+    const chunkBuf = Buffer.allocUnsafe(64 * 1024);
+    let lineChunks: Buffer[] = [];
+    let lineBytes = 0;
+    let discardCurrentLine = false;
+    let ordinal = 0;
+
+    const processLine = () => {
+      const currentOrdinal = ordinal;
+      ordinal += 1;
+      if (discardCurrentLine || lineBytes === 0) {
+        lineChunks = [];
+        lineBytes = 0;
+        discardCurrentLine = false;
+        return;
+      }
+      const text = (lineChunks.length === 1 ? lineChunks[0]! : Buffer.concat(lineChunks, lineBytes)).toString('utf8');
+      lineChunks = [];
+      lineBytes = 0;
+      if (!text.includes('"turn_context"')) return;
+      try {
+        const parsed = JSON.parse(text) as Record<string, unknown>;
+        if (parsed?.type !== 'turn_context' || !parsed.payload || typeof parsed.payload !== 'object' || Array.isArray(parsed.payload)) return;
+        const payload = parsed.payload as Record<string, unknown>;
+        const model = typeof payload.model === 'string' && payload.model.trim() ? payload.model.trim().slice(0, 96) : undefined;
+        const rawEffort = payload.effort ?? payload.reasoning_effort;
+        const reasoningEffort = typeof rawEffort === 'string' && /^[A-Za-z0-9_.-]{1,32}$/.test(rawEffort) ? rawEffort : undefined;
+        const turnId = typeof payload.turn_id === 'string' && SHORT_ID_PATTERN.test(payload.turn_id) ? payload.turn_id : undefined;
+        if (!model && !reasoningEffort) return;
+        const entry: RolloutTurnContextEntry = {
+          ordinal: currentOrdinal,
+          ...(turnId ? { turnId } : {}),
+          ...(model ? { model } : {}),
+          ...(reasoningEffort ? { reasoningEffort } : {}),
+        };
+        if (turnId) byTurnId.set(turnId, entry);
+        byOrdinal.push(entry);
+      } catch { /* ignore malformed JSONL line */ }
+    };
+
+    let bytesRead = 0;
+    while ((bytesRead = readSync(fd, chunkBuf, 0, chunkBuf.length, null)) > 0) {
+      let start = 0;
+      for (let i = 0; i < bytesRead; i++) {
+        if (chunkBuf[i] === 0x0a) {
+          const segLen = i - start;
+          if (!discardCurrentLine && segLen > 0) {
+            if (lineBytes + segLen <= MAX_ROLLOUT_LINE_BYTES) {
+              lineChunks.push(Buffer.from(chunkBuf.subarray(start, i)));
+              lineBytes += segLen;
+            } else {
+              discardCurrentLine = true;
+            }
+          }
+          processLine();
+          start = i + 1;
+        }
+      }
+      if (start < bytesRead && !discardCurrentLine) {
+        const segLen = bytesRead - start;
+        if (lineBytes + segLen <= MAX_ROLLOUT_LINE_BYTES) {
+          lineChunks.push(Buffer.from(chunkBuf.subarray(start, bytesRead)));
+          lineBytes += segLen;
+        } else {
+          discardCurrentLine = true;
+          lineChunks = [];
+          lineBytes = 0;
+        }
+      }
+    }
+    if (lineBytes > 0 || discardCurrentLine) processLine();
+  } catch {
+    return { byTurnId, byOrdinal };
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* ignore */ }
+    }
+  }
+  return { byTurnId, byOrdinal };
+}
+
+function findPositionalTurnContext(
+  entries: readonly RolloutTurnContextEntry[],
+  rolloutOrdinal: number,
+  rolloutEndOrdinal?: number,
+): RolloutTurnContextEntry | undefined {
+  let inRange: RolloutTurnContextEntry | undefined;
+  let latestPriorWithoutTurnId: RolloutTurnContextEntry | undefined;
+  const upper = rolloutEndOrdinal !== undefined && rolloutEndOrdinal >= rolloutOrdinal ? rolloutEndOrdinal : undefined;
+  for (const item of entries) {
+    if (!item.turnId) {
+      if (upper !== undefined && item.ordinal >= rolloutOrdinal && item.ordinal <= upper) {
+        inRange = item;
+      }
+      if (item.ordinal <= (upper ?? rolloutOrdinal)) {
+        latestPriorWithoutTurnId = item;
+      }
+    }
+  }
+  return inRange ?? latestPriorWithoutTurnId;
+}
+
 function readCodexThreadSnapshot(
   codexHome: string,
   threadId: string,
   afterOrdinal: number,
-  options: { environment?: NodeJS.ProcessEnv; maxTurns?: number } = {},
+  options: { environment?: NodeJS.ProcessEnv; maxTurns?: number; turnModels?: Readonly<Record<string, string>> } = {},
 ): CodexThreadSnapshot | null {
   if (!THREAD_ID_PATTERN.test(threadId)) return null;
   const statePath = resolveVersionedSqliteFile(codexHome, 'state', 'state_5.sqlite');
@@ -556,11 +708,13 @@ function readCodexThreadSnapshot(
   try {
     stateDb = new DatabaseSync(statePath, { readOnly: true, timeout: 1000 });
     const threadRow = stateDb.prepare(
-      'SELECT id, source, model_provider, cwd, tokens_used, cli_version, model, reasoning_effort, created_at, updated_at, created_at_ms, updated_at_ms FROM threads WHERE id = ? LIMIT 1',
+      'SELECT * FROM threads WHERE id = ? LIMIT 1',
     ).get(threadId) as Record<string, unknown> | undefined;
     stateDb.close();
     stateDb = undefined;
     if (!threadRow) return null;
+
+    const rolloutContexts = readRolloutTurnContexts(codexHome, threadRow.rollout_path);
 
     const nowMs = Date.now();
     const createdAtMs = toEpochMs(threadRow.created_at_ms ?? threadRow.created_at, nowMs);
@@ -589,7 +743,7 @@ function readCodexThreadSnapshot(
     const baseTurnIndex = Number(priorCountRow?.count ?? 0);
 
     const turnRows = historyDb.prepare(
-      'SELECT turn_id, rollout_ordinal, status, error_json, started_at, completed_at, duration_ms FROM thread_turns WHERE thread_id = ? AND rollout_ordinal > ? ORDER BY rollout_ordinal ASC LIMIT ?',
+      'SELECT * FROM thread_turns WHERE thread_id = ? AND rollout_ordinal > ? ORDER BY rollout_ordinal ASC LIMIT ?',
     ).all(threadId, afterOrdinal, maxTurns) as Array<Record<string, unknown>>;
 
     const itemStmt = historyDb.prepare(
@@ -832,6 +986,13 @@ function readCodexThreadSnapshot(
       const reasoningSummary = sanitizeCap(reasoningParts.join('\n'), env, redactPaths, 6000);
       const assistantReply = sanitizeCap(replyParts.join('\n\n'), env, redactPaths, 6000);
 
+      const rawEndOrdinal = typeof row.rollout_end_ordinal === 'bigint' ? Number(row.rollout_end_ordinal) : Number(row.rollout_end_ordinal);
+      const rolloutEndOrdinal = Number.isInteger(rawEndOrdinal) && rawEndOrdinal >= rolloutOrdinal ? rawEndOrdinal : undefined;
+      const rolloutTurnCtx = rolloutContexts.byTurnId.get(turnId)
+        ?? findPositionalTurnContext(rolloutContexts.byOrdinal, rolloutOrdinal, rolloutEndOrdinal);
+      const turnModel = rolloutTurnCtx?.model ?? options.turnModels?.[turnId] ?? defaultModel;
+      const turnEffort = rolloutTurnCtx?.reasoningEffort ?? reasoningEffort;
+
       turns.push({
         turn_index: baseTurnIndex + turns.length,
         turn_id: turnId,
@@ -840,8 +1001,8 @@ function readCodexThreadSnapshot(
         started_at: new Date(startedMs).toISOString(),
         ended_at: new Date(endedMs).toISOString(),
         duration_ms: durationMs,
-        model: defaultModel,
-        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+        model: turnModel,
+        ...(turnEffort ? { reasoning_effort: turnEffort } : {}),
         user_query: userQuery,
         ...(reasoningSummary ? { reasoning_summary: reasoningSummary } : {}),
         ...(assistantReply ? { assistant_reply: assistantReply } : {}),
@@ -1131,7 +1292,10 @@ export async function syncActiveCodexThreads(
         return { syncedTurns, activeThreads: 0 };
       }
 
-      const snapshot = readCodexThreadSnapshot(entry.codexHome, entry.threadId, entry.lastSyncedOrdinal, { environment: env });
+      const snapshot = readCodexThreadSnapshot(entry.codexHome, entry.threadId, entry.lastSyncedOrdinal, {
+        environment: env,
+        turnModels: entry.turnModels,
+      });
       if (!snapshot) {
         const idleMs = now - Math.max(entry.lastSeenAt, entry.lastUpdatedAtMs);
         const failures = entry.failures + 1;
@@ -1213,16 +1377,17 @@ export async function syncActiveCodexThreads(
           }
         }
         if (delivery.status === 'retry') {
-          failures = entry.failures + 1;
+          failures = delivery.lastAcceptedOrdinal !== null ? 1 : entry.failures + 1;
           retryNeeded = true;
         }
       }
 
       const lastUpdatedAtMs = Math.max(entry.lastUpdatedAtMs, snapshot.updatedAtMs);
       const lastActivityMs = Math.max(entry.lastSeenAt, lastUpdatedAtMs);
-      // Keep the thread queued if more turns remain beyond MAX_TURNS_PER_SYNC, or while retrying within budget.
+      // Evict unconditionally after MAX_CONSECUTIVE_FAILURES; otherwise keep queued while draining pages or within idle window.
       const hasMorePending = snapshot.turns.length >= MAX_TURNS_PER_SYNC;
-      const seal = !hasMorePending && ((!retryNeeded && now - lastActivityMs >= idleSealMs) || failures >= MAX_CONSECUTIVE_FAILURES);
+      const seal = failures >= MAX_CONSECUTIVE_FAILURES
+        || (!retryNeeded && !hasMorePending && now - lastActivityMs >= idleSealMs);
 
       outcomes.set(entry.threadId, {
         lastSyncedOrdinal: nextOrdinal,
